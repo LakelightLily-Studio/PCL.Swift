@@ -321,7 +321,7 @@ struct SetupWizardView: View {
             }
 
             if javaRuntimes.isEmpty {
-                MyTip(text: "启动器会在 `/Library/Java/JavaVirtualMachines` 与常见安装位置里查找 Java；也可以稍后在「设置 → Java 管理」里手动指定。", theme: .yellow)
+                MyTip(text: "启动器会在 `/Library/Java/JavaVirtualMachines` 与常见安装位置里查找 Java；也可以稍后在「设置 → 游戏」里手动指定。", theme: .yellow)
             }
         }
     }

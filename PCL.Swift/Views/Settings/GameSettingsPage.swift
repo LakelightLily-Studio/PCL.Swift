@@ -1,5 +1,5 @@
 //
-//  JavaSettingsPage.swift
+//  GameSettingsPage.swift
 //  PCL.Mac
 //
 //  Created by AnemoFlower on 2026/3/6.
@@ -8,7 +8,11 @@
 import SwiftUI
 import Core
 
-struct JavaSettingsPage: View {
+/// 设置 → 游戏。
+///
+/// Java 运行时管理原先独占一个侧边栏条目（「Java 管理」），现在归到游戏页下：
+/// Java 只服务于启动游戏，当作游戏配置比当作启动器的全局配置更贴合语义。
+struct GameSettingsPage: View {
     @StateObject private var viewModel: JavaSettingsViewModel = .init()
     
     var body: some View {

@@ -216,7 +216,7 @@ class LauncherConfig: Codable {
         case theme
     }
     
-    enum HomepageType: String, Codable, CustomStringConvertible {
+    enum HomepageType: String, Codable, CaseIterable, CustomStringConvertible {
         case empty, demo
         
         var description: String {

@@ -58,7 +58,7 @@ public enum MinecraftLaunchTask {
                 .yes(label: "安装")
             ) == 1 {
                 await AppRouter.shared.setRoot(.settings)
-                await AppRouter.shared.append(.javaSettings)
+                await AppRouter.shared.append(.gameSettings)
             }
             try task.cancel()
             return
