@@ -98,7 +98,12 @@ struct InstanceConfigPage: View {
                                     level: .error
                                 )
                             }
-                        } catch {}
+                        } catch {
+                            // switchJava 目前只抛 Error.invalidJavaVersion（上面已单独处理），
+                            // 其余错误按 UI 兜底处理，避免切换 Java 时静默失败。
+                            err("切换 Java 失败：\(error.localizedDescription)")
+                            hint("切换 Java 失败：\(error.localizedDescription)", type: .critical)
+                        }
                     }
                 }
                 .frame(minWidth: 150)

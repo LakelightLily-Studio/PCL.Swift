@@ -40,7 +40,11 @@ class InstanceConfigViewModel: ObservableObject {
         self.jvmArguments = instance.config.jvmArguments.joinedToArgumentLine()
         do {
             self.javaDescription = try instance.config.javaURL.map({ try JavaSearcher.load(from: $0) })?.description ?? "无"
-        } catch {}
+        } catch {
+            // 已配置的 Java 读不出来时只是描述缺失，页面仍可正常显示，用户可在列表里重新选择。
+            self.javaDescription = "无"
+            warn("读取实例已配置的 Java 失败：\(error.localizedDescription)")
+        }
     }
     
     public func javaList() -> [JavaRuntime] {

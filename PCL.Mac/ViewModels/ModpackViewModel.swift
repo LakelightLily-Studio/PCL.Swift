@@ -97,6 +97,10 @@ class ModpackViewModel: ObservableObject {
             default:
                 handleUnknownError(error)
             }
-        } catch {} // 不知道为什么必须加个 catch 兜底，上面的两个 catch 明明已经覆盖到所有声明了
+        } catch {
+            // Swift 要求 catch 覆盖全部错误；走到这里的是上面两个类型化 catch 之外的错误，
+            // 按未知错误处理，不再交给 handleUnknownError 是为了避免重复弹窗。
+            err("导入整合包时出现未分类错误：\(error.localizedDescription)")
+        }
     }
 }

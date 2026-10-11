@@ -166,13 +166,19 @@ public enum MinecraftInstanceLoader {
                     let versionInfo = try JSON(data: data)
                     return .init(versionInfo["id"].stringValue)
                 }
-            } catch {}
+            } catch {
+                // jar 打不开 / 没有 version.json / JSON 解析失败都走 sha1 反查，属于预期的降级路径。
+                debug("从 \(jarURL.lastPathComponent) 内读取 version.json 失败：\(error.localizedDescription)")
+            }
             
             do {
                 let sha1 = try FileUtils.sha1(of: jarURL)
                 let lookupResult = try await HTTPClient.shared.get("https://cylorine.studio/meta/mc/version_lookup/sha1/\(sha1)").json()
                 return .init(lookupResult["version"].stringValue)
-            } catch {}
+            } catch {
+                // 反查失败时版本识别退化为 nil，上层会回落到用目录名当版本号（见 load(_:) 的 `version = nil` 分支）。
+                warn("通过 sha1 反查实例版本失败：\(error.localizedDescription)")
+            }
         }
         
         return nil

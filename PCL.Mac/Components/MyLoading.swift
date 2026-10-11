@@ -109,7 +109,10 @@ struct MyLoading: View {
                     
                     try await Task.sleep(seconds: 0.98)
                 }
-            } catch {}
+            } catch {
+                // 停止动画时 setPickaxeAngle / Task.sleep 都会抛 CancellationError，
+                // 这是 stopAnimationLoop() 的正常路径，不需要记录。
+            }
         }
     }
     
