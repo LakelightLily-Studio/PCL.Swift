@@ -44,7 +44,7 @@ public class MinecraftVersion: Codable, Comparable, Equatable, Hashable, CustomS
     /// 之所以把规则单独提出来：`<` 依赖 `VersionManifest.shared` 的加载状态，
     /// 而清单由启动阶段缓存同步与网络异步两条路径写入。规则本身与全局状态无关，
     /// 拆出来之后可以脱离启动流程直接测试。
-    static func isOrdered(_ lhs: MinecraftVersion, before rhs: MinecraftVersion, using manifest: VersionManifest?) -> Bool {
+    public static func isOrdered(_ lhs: MinecraftVersion, before rhs: MinecraftVersion, using manifest: VersionManifest?) -> Bool {
         if let lVersion = manifest?.version(for: lhs.id), let rVersion = manifest?.version(for: rhs.id) {
             return lVersion.releaseTime < rVersion.releaseTime
         }
