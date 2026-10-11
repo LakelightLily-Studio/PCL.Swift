@@ -74,6 +74,10 @@ class AppRouter: ObservableObject {
     var root: AppRoute { path[0] }
     
     func setRoot(_ newRoot: AppRoute) {
+        var newRoot: AppRoute = newRoot
+        // 关掉联机开关后不允许再进入联机页：把路由请求改写回启动页，
+        // 否则该开关只能隐藏入口，页面依旧可达。
+        if !isRouteAvailable(newRoot) { newRoot = .launch }
         path = [newRoot]
         // 各根页面的默认子页面
         if newRoot == .download { append(.minecraftDownload) }
@@ -83,6 +87,7 @@ class AppRouter: ObservableObject {
     }
     
     func append(_ route: AppRoute) {
+        guard isRouteAvailable(route) else { return }
         path.append(route)
         if case .instanceSettings(let id) = route { append(.instanceConfig(id: id)) }
     }
@@ -92,6 +97,22 @@ class AppRouter: ObservableObject {
             path.removeLast()
             if case .instanceSettings = last { removeLast() }
         }
+    }
+    
+    /// 该路由在当前功能开关下是否可用。
+    func isRouteAvailable(_ route: AppRoute) -> Bool {
+        switch route {
+        case .multiplayer, .multiplayerSub, .multiplayerSettings:
+            return FlagsManager.shared?.isEnabled(.multiplayer) ?? false
+        default:
+            return true
+        }
+    }
+    
+    /// 开关被关闭时，把停在联机页的会话退回启动页。
+    func enforceFlagGates() {
+        guard !isRouteAvailable(last) else { return }
+        setRoot(.launch)
     }
     
     private init() {}

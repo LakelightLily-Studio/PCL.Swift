@@ -47,12 +47,16 @@ class FlagsManager: ObservableObject {
         applyChange(flag, enabled: enabled)
     }
     
+    /// 功能开关的作用点：每个 case 都要真的改变某个行为或界面，
+    /// 否则该开关就只是「隐藏入口」，关掉之后功能依然可用。
     private func applyChange(_ flag: FeatureFlag, enabled: Bool) {
         switch flag {
         case .deduplicateLibraries:
             ClientManifest.deduplicateLibraries = enabled
-        default:
-            break
+        case .multiplayer:
+            // 联机页的门禁由 AppRouter.isRouteAvailable(_:) 读取开关状态；
+            // 这里在开关变化时立刻把停在联机页的会话退出去。
+            AppRouter.shared.enforceFlagGates()
         }
     }
 }
