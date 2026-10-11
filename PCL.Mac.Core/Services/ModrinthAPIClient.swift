@@ -93,7 +93,7 @@ public class ModrinthAPIClient {
     }
     
     /// 获取指定 id 对应的 `ModrinthVersion`。
-    /// - Parameter slug: 指定 id。
+    /// - Parameter id: 指定 version 的 id。
     /// - Returns: 对应的 `ModrinthVersion`，不存在时返回 `nil`。
     public func version(_ id: String) async throws -> ModrinthVersion? {
         let response = try await HTTPClient.shared.get(apiRoot.appending(path: "/v2/version/\(id)"))
