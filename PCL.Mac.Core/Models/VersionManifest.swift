@@ -22,6 +22,7 @@ public struct VersionManifest: Decodable, Equatable {
     public static func install(_ manifest: VersionManifest) {
         _shared = manifest
     }
+    
     public let latestRelease: String
     public let latestSnapshot: String?
     public let versions: [Version]

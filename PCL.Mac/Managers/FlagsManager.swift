@@ -77,7 +77,10 @@ class FlagsManager: ObservableObject {
         case .multiplayer:
             // 联机页的门禁由 AppRouter.isRouteAvailable(_:) 读取开关状态；
             // 这里在开关变化时立刻把停在联机页的会话退出去。
-            AppRouter.shared.enforceFlagGates()
+            // AppRouter 属于主线程隔离，切开关可能来自任意线程，因此显式跳一次。
+            Task { @MainActor in
+                AppRouter.shared.enforceFlagGates()
+            }
         }
     }
 }
