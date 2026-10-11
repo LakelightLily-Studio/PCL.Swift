@@ -48,7 +48,6 @@ class LauncherConfig: Codable {
     
     public var minecraftRepositories: [MinecraftRepository] = []
     public var currentRepositoryId: UUID?
-    public var currentInstance: String?
     public var accounts: [Account] = []
     public var currentAccountId: UUID?
     public var multiplayerDisclaimerAgreed: Bool = false
@@ -69,7 +68,6 @@ class LauncherConfig: Codable {
         self.minecraftRepositories = try container.decodeIfPresent([MinecraftRepository].self, forKey: .minecraftRepositories) ?? []
         self.currentRepositoryId = try container.decodeIfPresent(UUID.self, forKey: .currentRepositoryId)
         
-        self.currentInstance = try container.decodeIfPresent(String.self, forKey: .currentInstance)
         self.accounts = (try container.decodeIfPresent([AccountWrapper].self, forKey: .accounts) ?? []).map(\.account)
         if !accounts.isEmpty {
             if let currentAccountId = try container.decodeIfPresent(UUID.self, forKey: .currentAccountId),
@@ -95,7 +93,6 @@ class LauncherConfig: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(minecraftRepositories, forKey: .minecraftRepositories)
         try container.encode(currentRepositoryId, forKey: .currentRepositoryId)
-        try container.encode(currentInstance, forKey: .currentInstance)
         try container.encode(accounts.map(AccountWrapper.init(_:)), forKey: .accounts)
         try container.encode(currentAccountId, forKey: .currentAccountId)
         try container.encode(multiplayerDisclaimerAgreed, forKey: .multiplayerDisclaimerAgreed)
@@ -118,7 +115,6 @@ class LauncherConfig: Codable {
     private enum CodingKeys: String, CodingKey {
         case minecraftRepositories
         case currentRepositoryId
-        case currentInstance
         case accounts
         case currentAccountId
         case multiplayerDisclaimerAgreed

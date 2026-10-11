@@ -43,7 +43,6 @@ enum AppRoute: Identifiable, Hashable, Equatable {
 @MainActor
 class AppRouter: ObservableObject {
     static let shared: AppRouter = .init()
-    private static let rootRoutes: [AppRoute] = [.launch, .download, .multiplayer, .settings, .more]
     
     @Published private(set) var path: [AppRoute] = [.launch]
     

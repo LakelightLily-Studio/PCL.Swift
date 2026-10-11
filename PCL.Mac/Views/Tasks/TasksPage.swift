@@ -89,8 +89,4 @@ private struct TaskCard: View {
                 }
         }
     }
-    
-    private var totalProgress: Double {
-        task.subTasks.reduce(0, { $0 + $1.progress }) / Double(task.subTasks.count)
-    }
 }
