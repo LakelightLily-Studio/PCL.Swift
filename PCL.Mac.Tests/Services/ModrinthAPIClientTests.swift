@@ -10,7 +10,7 @@ import Core
 import Testing
 
 struct ModrinthAPIClientTests {
-    @Test func test() async throws {
+    @Test(.enabled(if: TestEnvironment.networkAvailable)) func test() async throws {
         let response: ModrinthAPIClient.SearchResponse = try await ModrinthAPIClient.shared.search(type: .mod, "Tweakeroo", forVersion: nil)
         print("Total hits: \(response.totalHits), limit: \(response.limit)")
         for hit in response.hits {

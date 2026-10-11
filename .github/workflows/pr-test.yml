@@ -7,6 +7,7 @@ on:
       - ".github/workflows/**"
       - "PCL.Mac/**"
       - "PCL.Mac.Core/**"
+      - "PCL.Mac.Tests/**"
       - "PCL.Mac.xcodeproj/**"
       - "Resources/**"
 
@@ -17,3 +18,26 @@ jobs:
       build_configuration: Debug
       upload_artifact: false
     secrets: inherit
+
+  test:
+    runs-on: macos-26
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run tests
+        run: |
+          xcodebuild test \
+            -project PCL.Mac.xcodeproj \
+            -scheme PCL.Mac \
+            -destination 'platform=macOS' \
+            -resultBundlePath ./result.xcresult
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-test.xcresult
+          path: result.xcresult

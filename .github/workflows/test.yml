@@ -1,5 +1,9 @@
 name: Run Tests
 on:
+  # main 上的每次合入都跑一遍；PR 由 pr-test.yml 负责，避免同一次提交跑两遍。
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       macos_26:
@@ -14,7 +18,8 @@ on:
 jobs:
   test_macos_26:
     name: Test on macOS 26
-    if: ${{ github.event.inputs.macos_26 == 'true' }}
+    # 手动触发时仍按输入决定；push 事件没有 inputs，默认执行。
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.macos_26 == 'true' }}
     runs-on: macos-26
     steps:
       - name: Checkout code
