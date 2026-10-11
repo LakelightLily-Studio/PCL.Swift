@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Core
 
 struct TasksSidebar: Sidebar {
     @ObservedObject private var taskManager: TaskManager = .shared
