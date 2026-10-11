@@ -15,7 +15,20 @@ public enum DownloadSourcePolicy: String, Codable {
 }
 
 public class DownloadSourceManager {
-    public static var shared: DownloadSourceManager!
+    private static var _shared: DownloadSourceManager?
+
+    /// 全局实例。必须在启动阶段由 `AppDelegate` 注入后才能访问：
+    /// 早于注入访问会立刻在注入点给出可定位的失败，而不是在某个随机调用点崩溃。
+    public static var shared: DownloadSourceManager {
+        guard let instance = _shared else {
+            fatalError("DownloadSourceManager.shared 在注入之前被访问，请检查 AppDelegate 的初始化顺序。")
+        }
+        return instance
+    }
+
+    public static func install(_ instance: DownloadSourceManager) {
+        _shared = instance
+    }
 
     public var officialSource: OfficialDownloadSource = .shared
     public let mirrorSource: MirrorDownloadSource = .shared

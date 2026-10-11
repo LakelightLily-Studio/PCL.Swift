@@ -8,7 +8,20 @@
 import Foundation
 
 public final class JavaManager: ObservableObject {
-    public static var shared: JavaManager!
+    private static var _shared: JavaManager?
+
+    /// 全局实例。必须在启动阶段由 `AppDelegate` 注入后才能访问：
+    /// 早于注入访问会立刻在注入点给出可定位的失败，而不是在某个随机调用点崩溃。
+    public static var shared: JavaManager {
+        guard let instance = _shared else {
+            fatalError("JavaManager.shared 在注入之前被访问，请检查 AppDelegate 的初始化顺序。")
+        }
+        return instance
+    }
+
+    public static func install(_ instance: JavaManager) {
+        _shared = instance
+    }
     
     @Published public private(set) var javaRuntimes: [JavaRuntime]
     private var customJavaRuntimes: [URL]

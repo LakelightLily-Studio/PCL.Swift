@@ -9,7 +9,23 @@ import Foundation
 import Core
 
 class FlagsManager: ObservableObject {
-    public static var shared: FlagsManager!
+    private static var _shared: FlagsManager?
+
+    /// 全局实例。必须在启动阶段由 `AppDelegate` 注入后才能访问：
+    /// 早于注入访问会立刻在注入点给出可定位的失败，而不是在某个随机调用点崩溃。
+    public static var shared: FlagsManager {
+        guard let instance = _shared else {
+            fatalError("FlagsManager.shared 在注入之前被访问，请检查 AppDelegate 的初始化顺序。")
+        }
+        return instance
+    }
+
+    public static func install(_ instance: FlagsManager) {
+        // 先发布实例再应用开关：`applyChange` 可能回调到读取 `shared` 的地方
+        // （例如关闭联机开关时让路由退出联机页）。
+        _shared = instance
+        instance.applyAllFlags()
+    }
     @Published private(set) var enabledFlags: Set<FeatureFlag>
     private let defaultFlags = Set<FeatureFlag>(arrayLiteral: .deduplicateLibraries)
     
@@ -19,6 +35,11 @@ class FlagsManager: ObservableObject {
         } else {
             self.enabledFlags = defaultFlags
         }
+    }
+    
+    /// 把当前开关状态同步到各消费点。
+    /// 由 `install(_:)` 在实例发布之后调用，不能放进 `init`。
+    func applyAllFlags() {
         for flag in FeatureFlag.allCases {
             applyChange(flag, enabled: isEnabled(flag))
         }

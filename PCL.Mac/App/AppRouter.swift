@@ -103,7 +103,7 @@ class AppRouter: ObservableObject {
     func isRouteAvailable(_ route: AppRoute) -> Bool {
         switch route {
         case .multiplayer, .multiplayerSub, .multiplayerSettings:
-            return FlagsManager.shared?.isEnabled(.multiplayer) ?? false
+            return FlagsManager.shared.isEnabled(.multiplayer)
         default:
             return true
         }

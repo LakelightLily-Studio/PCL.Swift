@@ -68,11 +68,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         _ = Secrets.shared
         
-        DownloadSourceManager.shared = .init(policy: LauncherConfig.shared.downloadSourcePolicy, curseforgeApiKey: Secrets.shared.curseforgeApiKey)
+        DownloadSourceManager.install(.init(policy: LauncherConfig.shared.downloadSourcePolicy, curseforgeApiKey: Secrets.shared.curseforgeApiKey))
         
-        FlagsManager.shared = .init(enabledFlags: LauncherConfig.shared.enabledFlags)
+        FlagsManager.install(.init(enabledFlags: LauncherConfig.shared.enabledFlags))
         
-        JavaManager.shared = .init(customJavaRuntimes: LauncherConfig.shared.customJavaRuntimes)
+        JavaManager.install(.init(customJavaRuntimes: LauncherConfig.shared.customJavaRuntimes))
         
         executeAsyncTask("刷新地区信息", silent: true) {
             await DownloadSourceManager.shared.refreshRegion()
@@ -116,7 +116,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if !shouldInit { return }
         log("App 启动完成")
-        ResourceCache.shared = .init(cacheDirectory: URLConstants.cacheURL)
+        ResourceCache.install(.init(cacheDirectory: URLConstants.cacheURL))
         
         let instanceManager = InstanceManager(
             repositories: LauncherConfig.shared.minecraftRepositories.reduce(into: [:], { $0[$1.id] = $1 }),
