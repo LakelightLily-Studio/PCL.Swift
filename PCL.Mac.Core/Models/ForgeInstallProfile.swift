@@ -20,10 +20,6 @@ public struct ForgeInstallProfile: Codable {
         case clientManifestPath = "json"
     }
     
-    public enum Side: String, Codable {
-        case client, server
-    }
-    
     public struct DataEntry: Codable {
         public let client: String
         public let server: String

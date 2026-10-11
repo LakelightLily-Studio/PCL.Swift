@@ -8,6 +8,7 @@
 import Foundation
 import SwiftyJSON
 
+/// 资源索引文件本体：散列资源（objects）列表，由 `ClientManifest.AssetIndexRef` 指向的 URL 下载后解析。
 /// https://zh.minecraft.wiki/w/散列资源文件#资源索引
 public struct AssetIndex: Decodable {
     public let objects: [Object]

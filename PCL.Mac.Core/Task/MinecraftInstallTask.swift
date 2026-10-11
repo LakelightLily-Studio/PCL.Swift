@@ -259,7 +259,7 @@ public enum MinecraftInstallTask {
     }
     
     private static func downloadAssetIndex(
-        assetIndex: ClientManifest.AssetIndex,
+        assetIndex: ClientManifest.AssetIndexRef,
         repository: MinecraftRepository,
         progressHandler: @MainActor @escaping (Double) -> Void
     ) async throws -> AssetIndex {
@@ -359,7 +359,7 @@ public enum MinecraftInstallTask {
         
         public var manifest: ClientManifest!
         public var mappedManifest: ClientManifest!
-        public var assetIndex: AssetIndex?
+        public var assetIndex: AssetIndexRef?
         
         public var forgeInstallService: ForgeInstallService?
         

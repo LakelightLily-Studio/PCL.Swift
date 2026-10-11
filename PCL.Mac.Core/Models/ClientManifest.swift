@@ -16,7 +16,7 @@ public class ClientManifest: Decodable {
     public let gameArguments: [Argument]
     public let jvmArguments: [Argument]
     public let assets: String?
-    public let assetIndex: AssetIndex?
+    public let assetIndex: AssetIndexRef?
     public let downloads: Downloads?
     public let id: String
     public let javaVersion: JavaVersion
@@ -44,7 +44,7 @@ public class ClientManifest: Decodable {
         gameArguments: [Argument],
         jvmArguments: [Argument],
         assets: String?,
-        assetIndex: AssetIndex?,
+        assetIndex: AssetIndexRef?,
         downloads: Downloads?,
         id: String,
         javaVersion: JavaVersion,
@@ -91,7 +91,7 @@ public class ClientManifest: Decodable {
         }
         
         self.assets = try container.decodeIfPresent(String.self, forKey: .assets)
-        self.assetIndex = try container.decodeIfPresent(AssetIndex.self, forKey: .assetIndex)
+        self.assetIndex = try container.decodeIfPresent(AssetIndexRef.self, forKey: .assetIndex)
         self.downloads = try container.decodeIfPresent(Downloads.self, forKey: .downloads)
         let id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString.lowercased()
         self.id = id
@@ -182,7 +182,9 @@ public class ClientManifest: Decodable {
         }
     }
     
-    public class AssetIndex: Codable {
+    /// 清单内嵌的资源索引描述符（id / sha1 / size / totalSize / url），本身不含资源列表；
+    /// 下载 `url` 后由 `AssetIndex` 解析出具体文件。
+    public class AssetIndexRef: Codable {
         public let id: String
         public let sha1: String
         public let size: Int
