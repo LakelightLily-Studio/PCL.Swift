@@ -62,13 +62,25 @@ public struct ModrinthModpackIndex: Codable {
             return description
         }
         
-        public func modLoader() -> (String, String)? {
-            if let forge { return (ModLoader.forge.rawValue, forge) }
-            if let neoforge { return (ModLoader.neoforge.rawValue, neoforge) }
-            if let fabricLoader { return (ModLoader.fabric.rawValue, fabricLoader) }
-            if let quiltLoader { return ("quilt", quiltLoader) }
+        /// 返回本整合包声明的模组加载器与版本号；未声明加载器时返回 `nil`。
+        /// - Throws: `ModpackLoaderError.unsupportedDeclaredLoader`，当声明的是本启动器
+        ///   尚未支持的加载器。
+        ///
+        /// 此前该方法对 `quilt` 只做透传，返回值到 `ModpackImportService.parseModLoader(_:)`
+        /// 的 `ModLoader(rawValue:)` 必然失败，最终以 `unsupportedModLoader` 兜底；
+        /// 现在由声明处直接把「不支持」说出来，调用方不必再从兜底错误里反推原因。
+        public func modLoader() throws(ModpackLoaderError) -> (ModLoader, String)? {
+            if let forge { return (.forge, forge) }
+            if let neoforge { return (.neoforge, neoforge) }
+            if let fabricLoader { return (.fabric, fabricLoader) }
+            if quiltLoader != nil { throw .unsupportedDeclaredLoader(name: "Quilt") }
             return nil
         }
+    }
+    
+    /// 整合包声明的加载器不能被本启动器处理时的原因。
+    public enum ModpackLoaderError: Error {
+        case unsupportedDeclaredLoader(name: String)
     }
     
     public let formatVersion: Int

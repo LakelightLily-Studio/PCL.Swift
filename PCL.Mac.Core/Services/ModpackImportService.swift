@@ -101,7 +101,17 @@ public class ModpackImportService {
     private func loadIndex(from archive: Archive) throws(LoadError) -> ModpackIndex {
         if let modrinthIndexEntry = archive["modrinth.index.json"] {
             let index: ModrinthModpackIndex = try decodeIndex(from: modrinthIndexEntry, in: archive)
-            let modLoader: (ModLoader, String)? = try index.dependencies.modLoader().map(parseModLoader(_:))
+            let declaredLoader: (ModLoader, String)?
+            do {
+                declaredLoader = try index.dependencies.modLoader()
+            } catch {
+                // 模型层只说「这个加载器不支持」，面向用户的文案仍由 LoadError 统一负责。
+                switch error {
+                case .unsupportedDeclaredLoader(let name):
+                    throw LoadError.unsupportedModLoader(name: name)
+                }
+            }
+            let modLoader: (ModLoader, String)? = declaredLoader
             
             return .init(
                 format: .modrinth,
