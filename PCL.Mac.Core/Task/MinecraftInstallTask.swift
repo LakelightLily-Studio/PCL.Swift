@@ -264,7 +264,7 @@ public enum MinecraftInstallTask {
         progressHandler: @MainActor @escaping (Double) -> Void
     ) async throws -> AssetIndex {
         let destination: URL = repository.assetsDirectory
-            .appending(path: "indexes/\(assetIndex.id).json")
+            .appending(path: "indexes/\(assetIndex.id).json")  // 文件名沿用清单里的 id，与官方目录结构一致
         try await FileDownloader.shared.download(
             url: assetIndex.url,
             destination: destination,
@@ -359,7 +359,8 @@ public enum MinecraftInstallTask {
         
         public var manifest: ClientManifest!
         public var mappedManifest: ClientManifest!
-        public var assetIndex: AssetIndexRef?
+        /// 已下载并解析的资源索引（由 `ClientManifest.AssetIndexRef` 指向的 URL 得到）。
+        public var assetIndex: AssetIndex?
         
         public var forgeInstallService: ForgeInstallService?
         

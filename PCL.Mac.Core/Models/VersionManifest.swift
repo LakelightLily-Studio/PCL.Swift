@@ -10,7 +10,20 @@ import SwiftyJSON
 
 /// https://zh.minecraft.wiki/w/Version_manifest.json#JSON格式
 public struct VersionManifest: Decodable, Equatable {
-    public static var shared: VersionManifest?
+    private static var _shared: VersionManifest?
+    
+    /// 当前使用的版本清单；未加载时为 `nil`。
+    ///
+    /// 写入只允许经 `load(revalidate:)`（拉取/缓存）与 `install(_:)`（外部注入），
+    /// 避免任意调用点直接改写全局加载状态。
+    public private(set) static var shared: VersionManifest? {
+        get { _shared }
+    }
+    
+    /// 注入一份已经拿到的清单（例如启动时读取本地缓存）。
+    public static func install(_ manifest: VersionManifest) {
+        _shared = manifest
+    }
     public let latestRelease: String
     public let latestSnapshot: String?
     public let versions: [Version]
@@ -108,7 +121,7 @@ public extension VersionManifest {
         let manifest = try response.decode(VersionManifest.self)
         if Self.shared == nil || Self.shared != manifest {
             log("刷新版本清单成功")
-            Self.shared = manifest
+            Self.install(manifest)
             do {
                 try response.data.write(to: cacheURL)
             } catch {

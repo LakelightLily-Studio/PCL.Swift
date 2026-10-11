@@ -93,7 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 executeTask("从缓存中加载版本列表") {
                     let cachedData = try Data(contentsOf: URLConstants.cacheURL.appending(path: "version_manifest.json"))
                     let manifest = try JSONDecoder.shared.decode(VersionManifest.self, from: cachedData)
-                    VersionManifest.shared = manifest
+                    VersionManifest.install(manifest)
                 }
             }
         }
