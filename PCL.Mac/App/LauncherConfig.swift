@@ -9,7 +9,12 @@ import Foundation
 import Core
 
 class LauncherConfig: Codable {
+    /// `shared` 构造期间为 `false`：解码过程会依次给各属性赋值，
+    /// 此时触发写盘会递归访问尚未构造完成的 `shared`。
+    private static var isLoaded: Bool = false
+    
     public static let shared: LauncherConfig = {
+        defer { isLoaded = true }
         let url = URLConstants.configURL
         
         if !FileManager.default.fileExists(atPath: url.path) {
@@ -46,20 +51,48 @@ class LauncherConfig: Codable {
     public static let backupURL: URL = URLConstants.applicationSupportURL.appending(path: "config.bak.json")
     public private(set) static var loadError: Error?
     
-    public var minecraftRepositories: [MinecraftRepository] = []
-    public var currentRepositoryId: UUID?
-    public var accounts: [Account] = []
-    public var currentAccountId: UUID?
-    public var multiplayerDisclaimerAgreed: Bool = false
-    public var hasMicrosoftAccount: Bool = false
-    public var launchCount: Int = 0
-    public var hasEnteredLauncher: Bool = false
-    public var multiplayerCustomPeer: String?
-    public var ignoreLauncherUpdates: Bool = false
-    public var downloadSourcePolicy: DownloadSourcePolicy = .officialFirst
-    public var homepageType: HomepageType = .empty
-    public var enabledFlags: Set<FeatureFlag>?
-    public var customJavaRuntimes: [URL] = []
+    public var minecraftRepositories: [MinecraftRepository] = [] {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var currentRepositoryId: UUID? {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var accounts: [Account] = [] {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var currentAccountId: UUID? {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var multiplayerDisclaimerAgreed: Bool = false {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var hasMicrosoftAccount: Bool = false {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var launchCount: Int = 0 {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var hasEnteredLauncher: Bool = false {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var multiplayerCustomPeer: String? {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var ignoreLauncherUpdates: Bool = false {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var downloadSourcePolicy: DownloadSourcePolicy = .officialFirst {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var homepageType: HomepageType = .empty {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var enabledFlags: Set<FeatureFlag>? {
+        didSet { LauncherConfig.markDirty() }
+    }
+    public var customJavaRuntimes: [URL] = [] {
+        didSet { LauncherConfig.markDirty() }
+    }
     
     public init() {}
     
@@ -105,6 +138,41 @@ class LauncherConfig: Codable {
         try container.encode(homepageType, forKey: .homepageType)
         try container.encodeIfPresent(enabledFlags, forKey: .enabledFlags)
         try container.encode(customJavaRuntimes, forKey: .customJavaRuntimes)
+    }
+    
+    /// 合并短时间内的多次变更，避免每个字段改动都触发一次写盘。
+    private static var pendingSave: DispatchWorkItem?
+    /// 写盘前至少等待的静默时间。
+    private static let saveDebounceInterval: TimeInterval = 0.5
+    
+    /// 声明配置已被修改，稍后落盘。
+    ///
+    /// 此前只有退出时（`applicationWillTerminate`）才写盘，崩溃或强退会丢掉
+    /// 本次运行里的全部设置。
+    public static func markDirty() {
+        guard isLoaded else { return }
+        pendingSave?.cancel()
+        let workItem = DispatchWorkItem {
+            pendingSave = nil
+            do {
+                try save()
+            } catch {
+                err("保存配置文件失败：\(error.localizedDescription)")
+            }
+        }
+        pendingSave = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + saveDebounceInterval, execute: workItem)
+    }
+    
+    /// 立即落盘；退出流程与崩溃路径使用（不等待 debounce）。
+    public static func flush() {
+        pendingSave?.cancel()
+        pendingSave = nil
+        do {
+            try save()
+        } catch {
+            err("保存配置文件失败：\(error.localizedDescription)")
+        }
     }
     
     public static func save(_ config: LauncherConfig = .shared, to url: URL = URLConstants.configURL) throws {

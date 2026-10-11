@@ -182,7 +182,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         executeTask("保存启动器配置") {
             LauncherConfig.shared.enabledFlags = FlagsManager.shared.enabledFlags
-            try LauncherConfig.save()
+            LauncherConfig.flush()
         }
         EasyTierManager.shared.terminateAll()
     }
