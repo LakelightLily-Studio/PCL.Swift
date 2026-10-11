@@ -372,19 +372,18 @@ public class ClientManifest: Decodable {
         }
     }
     
-    /// 获取所有可用的普通依赖库。
-    /// - Returns: 所有可用的普通依赖库。
+    /// 获取所有可用的普通依赖库（排除 natives，且要求 rules 判定通过）。
     public func getLibraries() -> [Library] {
         return libraries.filter { !$0.isNativesLibrary && $0.isRulesSatisfied }
     }
     
-    /// 获取所有可用的本地库。
-    /// - Returns: 所有可用的本地库。
+    /// 获取所有可用的 natives 库（`isNativesLibrary` 为真，且要求 rules 判定通过）。
     public func getNatives() -> [Library] {
         return libraries.filter { $0.isNativesLibrary && $0.isRulesSatisfied }
     }
     
     /// 创建一个新清单，继承本清单的所有属性，并使用指定的 libraries。
+    /// 原有 libraries 会被整体替换，不做合并。
     public func setLibraries(to libraries: [Library]) -> ClientManifest {
         return .init(gameArguments: gameArguments, jvmArguments: jvmArguments, assets: assets, assetIndex: assetIndex, downloads: downloads, id: id, javaVersion: javaVersion, libraries: libraries, logging: logging, mainClass: mainClass, inheritsFrom: inheritsFrom, version: version)
     }

@@ -204,10 +204,8 @@ public enum MinecraftInstanceLoader {
         /// 实例未完成安装（有 `.incomplete` 标记）。
         case incomplete
         
-        /// 未找到客户端清单。
         case missingManifest
         
-        /// 客户端清单加载失败。
         case failedToLoadManifest(underlying: Error)
         
         public var errorDescription: String? {
@@ -223,7 +221,6 @@ public enum MinecraftInstanceLoader {
     }
     
     public enum ManifestLoadError: LocalizedError {
-        /// 读取清单文件失败。
         case failedToRead(underlying: Error)
         
         /// 清单解析失败。
@@ -236,7 +233,6 @@ public enum MinecraftInstanceLoader {
         /// 未找到父清单（`inheritsFrom`）文件。
         case missingParentManifest
         
-        /// 清单继承深度超限。
         case tooManyRecursions
         
         public var errorDescription: String? {
@@ -256,10 +252,7 @@ public enum MinecraftInstanceLoader {
     }
     
     public enum ConfigLoadError: LocalizedError {
-        /// 配置文件不存在。
         case fileDoesNotExist
-        
-        /// 解析配置文件失败。
         case failedToDecodeConfig(underlying: Error)
         
         public var errorDescription: String? {
@@ -304,17 +297,10 @@ public extension MinecraftInstanceLoader {
         }
     }
     
+    /// 实例写盘失败的原因，`errorDescription` 即面向用户的文案。
     enum SaveError: LocalizedError {
-        /// 配置文件序列化失败。
-        /// - Parameter underlying: 序列化时抛出的 `EncodingError`。
         case failedToEncodeConfig(underlying: Error)
-        
-        /// 元数据序列化失败。
-        /// - Parameter underlying: 序列化时抛出的 `EncodingError`。
         case failedToEncodeMetadata(underlying: Error)
-        
-        /// 写入文件失败。
-        /// - Parameter underlying: 写入时抛出的实际错误。
         case failedToWriteFile(underlying: Error)
         
         public var errorDescription: String? {
