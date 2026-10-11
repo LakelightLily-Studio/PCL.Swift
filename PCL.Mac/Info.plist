@@ -6,8 +6,10 @@
 	<string>$(DEBUG_MODE)</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
+		<!-- 所有下载源与 API 均已使用 https；调试模式下保留全局放行，
+		     便于临时指向本地 http 服务排查问题。 -->
 		<key>NSAllowsArbitraryLoads</key>
-		<true/>
+		<string>$(DEBUG_MODE)</string>
 	</dict>
 </dict>
 </plist>

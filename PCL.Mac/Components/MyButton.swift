@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Core
 
 struct MyButton: View {
     @State private var hovered: Bool = false
@@ -100,7 +101,7 @@ struct MyButton: View {
 
 #Preview {
     MyButton("实例选择", type: .highlight) {
-        print("Button pressed")
+        debug("Button pressed")
     }
     .frame(width: 117, height: 32)
     .padding()
