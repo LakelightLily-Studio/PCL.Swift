@@ -108,17 +108,7 @@ struct InstanceListPage: View {
     
     @ViewBuilder
     private func infoLine(label: String,  @ViewBuilder body: () -> some View) -> some View {
-        HStack(spacing: 20) {
-            MyText(label)
-                .frame(width: 120, alignment: .leading)
-            HStack {
-                Spacer(minLength: 0)
-                body()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 1)
+        SettingRow(label, verticalPadding: 1, content: body)
     }
 }
 

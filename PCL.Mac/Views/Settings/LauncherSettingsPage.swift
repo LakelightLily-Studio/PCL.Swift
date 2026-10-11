@@ -44,15 +44,6 @@ struct LauncherSettingsPage: View {
     
     @ViewBuilder
     private func configLine(label: String,  @ViewBuilder body: () -> some View) -> some View {
-        HStack(spacing: 20) {
-            MyText(label)
-                .frame(width: 80, alignment: .leading)
-            HStack {
-                Spacer(minLength: 0)
-                body()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 6)
+        SettingRow(label, labelWidth: 80, content: body)
     }
 }

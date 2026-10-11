@@ -49,7 +49,7 @@ class UpdateService {
                     return .init(id: index + 10, label: link.name, type: .normal) {
                         NSWorkspace.shared.open(link.url)
                     }
-                } + [.init(id: 2, label: "不再提示", type: .normal), .no(), .yes(label: "下载并安装（\(formatSize(version.downloads.size))）", type: .highlight)]
+                } + [.init(id: 2, label: "不再提示", type: .normal), .no(), .yes(label: "下载并安装（\(ByteFormat.string(.init(version.downloads.size)))）", type: .highlight)]
             )
             
             if result == 2 {
@@ -73,19 +73,5 @@ class UpdateService {
                 hint("更新失败：\(error.localizedDescription)", type: .critical)
             }
         }
-    }
-    
-    private func formatSize(_ size: Int) -> String {
-        let units: [String] = ["B", "KB", "MB", "GB", "TB"]
-        var value: Double = .init(size)
-        var unitIndex: Int = 0
-        
-        while value >= 1024 && unitIndex < units.count - 1 {
-            value /= 1024
-            unitIndex += 1
-        }
-        
-        let formatted: String = .init(format: value < 10 && unitIndex > 0 ? "%.1f" : "%.0f", value)
-        return "\(formatted) \(units[unitIndex])"
     }
 }

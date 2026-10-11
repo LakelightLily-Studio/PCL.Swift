@@ -112,15 +112,6 @@ struct InstanceConfigPage: View {
     
     @ViewBuilder
     private func configLine(label: String,  @ViewBuilder body: () -> some View) -> some View {
-        HStack(spacing: 20) {
-            MyText(label)
-                .frame(width: 120, alignment: .leading)
-            HStack {
-                Spacer(minLength: 0)
-                body()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 6)
+        SettingRow(label, content: body)
     }
 }
