@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="153px" height="205px" viewBox="0 0 153 205" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>路径</title>
+    <defs>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="100%" id="linearGradient-1">
+            <stop stop-color="#FD9F2A" offset="0%"></stop>
+            <stop stop-color="#FDDC57" offset="100%"></stop>
+        </linearGradient>
+        <polygon id="path-2" points="81.3285056 1 100.510737 1 100.510737 102.279109 10.9359798 153.858749 -2.26665836e-15 134.772987 80.3082033 89.0360341"></polygon>
+        <filter x="-39.1%" y="-22.6%" width="173.4%" height="148.3%" filterUnits="objectBoundingBox" id="filter-3">
+            <feMorphology radius="6.5" operator="dilate" in="SourceAlpha" result="shadowSpreadOuter1"></feMorphology>
+            <feOffset dx="0" dy="0" in="shadowSpreadOuter1" result="shadowOffsetOuter1"></feOffset>
+            <feGaussianBlur stdDeviation="5" in="shadowOffsetOuter1" result="shadowBlurOuter1"></feGaussianBlur>
+            <feColorMatrix values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0  0 0 0 0.25 0" type="matrix" in="shadowBlurOuter1"></feColorMatrix>
+        </filter>
+    </defs>
+    <g id="页面-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="画框" transform="translate(-74, -84)">
+            <g id="编组" transform="translate(97.7959, 111.399)">
+                <g id="路径" transform="translate(50.2554, 77.4294) scale(-1, -1) translate(-50.2554, -77.4294)">
+                    <use fill="black" fill-opacity="1" filter="url(#filter-3)" xlink:href="#path-2"></use>
+                    <use fill="url(#linearGradient-1)" fill-rule="evenodd" xlink:href="#path-2"></use>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

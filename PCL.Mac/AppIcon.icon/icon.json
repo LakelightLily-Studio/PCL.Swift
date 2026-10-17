@@ -1,0 +1,176 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:1.00000,1.00000,1.00000,1.00000",
+      "extended-gray:1.00000,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
+      }
+    }
+  },
+  "groups" : [
+    {
+      "blend-mode" : "darken",
+      "blur-material" : 0,
+      "layers" : [
+        {
+          "blend-mode" : "hard-light",
+          "glass" : true,
+          "image-name" : "path-8.svg",
+          "name" : "path-8",
+          "opacity" : 0.7,
+          "position" : {
+            "scale" : 1.1600000000000001,
+            "translation-in-points" : [
+              -118.76668347154958,
+              -0.5450352500000122
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "image-name" : "path-10.svg",
+          "name" : "path-10",
+          "opacity" : 0.7,
+          "position" : {
+            "scale" : 1.1600000000000001,
+            "translation-in-points" : [
+              15.598645538795779,
+              0.4149647499999105
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "image-name" : "path-12.svg",
+          "name" : "path-12",
+          "opacity" : 0.7,
+          "position" : {
+            "scale" : 1.1600000000000001,
+            "translation-in-points" : [
+              146.9711355491396,
+              -3.1649647499999674
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "image-name" : "形状结合 2.svg",
+          "name" : "形状结合 2",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 1.3,
+            "translation-in-points" : [
+              105.7657712402355,
+              64.16600015786435
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "image-name" : "形状结合.svg",
+          "name" : "形状结合",
+          "position" : {
+            "scale" : 1.3,
+            "translation-in-points" : [
+              -100.72990173663379,
+              -60.93610324056726
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "hidden" : true,
+          "image-name" : "路径 2.svg",
+          "name" : "路径 2",
+          "position" : {
+            "scale" : 1.3,
+            "translation-in-points" : [
+              132.40419469999983,
+              80.601
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "hidden" : true,
+          "image-name" : "路径.svg",
+          "name" : "路径",
+          "position" : {
+            "scale" : 1.3,
+            "translation-in-points" : [
+              -127.90425770000002,
+              -86.37772949999987
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "image-name" : "多边形 3.svg",
+          "name" : "多边形 3",
+          "position" : {
+            "scale" : 1.3,
+            "translation-in-points" : [
+              2.051268499999992,
+              1.3800705000001017
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "image-name" : "多边形 2.svg",
+          "name" : "多边形 2",
+          "position" : {
+            "scale" : 1.3,
+            "translation-in-points" : [
+              2.05126869999998,
+              4.000000000000057
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "image-name" : "多边形.svg",
+          "name" : "多边形",
+          "position" : {
+            "scale" : 1.3,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "lighting" : "individual",
+      "position" : {
+        "scale" : 1.16,
+        "translation-in-points" : [
+          0,
+          0
+        ]
+      },
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 1
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.1
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

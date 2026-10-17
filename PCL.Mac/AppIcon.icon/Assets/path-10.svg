@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="225px" height="241px" viewBox="0 0 225 241" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>path-10</title>
+    <defs>
+        <path d="M59.7196262,102.316206 C70.8224299,102.316206 78.8971963,96.4242427 83.9439252,84.6403162 L108,98.916996 C106.205608,104.355731 103.121495,109.369565 98.7476636,113.958498 C94.3738318,118.547431 88.9065421,122.201581 82.3457944,124.920949 C75.7850467,127.640316 68.4672897,129 60.3925234,129 C49.2897196,129 39.1401867,126.337286 29.9439252,121.011858 C20.7476638,115.686429 13.4579439,108.123188 8.07476636,98.3221344 C2.69158879,88.5210806 0,77.2187091 0,64.4150198 C0,51.6113307 2.69158879,40.3372859 8.07476636,30.5928854 C13.4579439,20.8484848 20.7476638,13.3135705 29.9439252,7.98814229 C39.1401867,2.6627141 49.2897196,0 60.3925234,0 C68.4672897,0 75.7850467,1.35968379 82.3457944,4.07905138 C88.9065421,6.79841897 94.3738318,10.4525692 98.7476636,15.041502 C103.121495,19.6304348 106.205608,24.6442688 108,30.083004 L83.9439252,44.3596838 C78.8971963,32.5757576 70.8224299,26.6837945 59.7196262,26.6837945 C54.2242993,26.6837945 49.2616825,28.185112 44.8317757,31.187747 C40.4018689,34.1903821 36.8691586,38.5527009 34.2336449,44.2747036 C31.5981311,49.9967062 30.2803738,56.7101449 30.2803738,64.4150198 C30.2803738,72.1198946 31.5981311,78.8616601 34.2336449,84.6403162 C36.8691586,90.4189723 40.4018689,94.8096182 44.8317757,97.812253 C49.2616825,100.814888 54.2242993,102.316206 59.7196262,102.316206 Z" id="path-1"></path>
+        <filter x="-77.8%" y="-65.1%" width="259.3%" height="230.2%" filterUnits="objectBoundingBox" id="filter-2">
+            <feMorphology radius="10" operator="dilate" in="SourceAlpha" result="shadowSpreadOuter1"></feMorphology>
+            <feOffset dx="0" dy="0" in="shadowSpreadOuter1" result="shadowOffsetOuter1"></feOffset>
+            <feGaussianBlur stdDeviation="18" in="shadowOffsetOuter1" result="shadowBlurOuter1"></feGaussianBlur>
+            <feColorMatrix values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0  0 0 0 0.25 0" type="matrix" in="shadowBlurOuter1"></feColorMatrix>
+        </filter>
+    </defs>
+    <g id="页面-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="画框" transform="translate(-183, -157)">
+            <g id="PCL" transform="translate(124, 213)">
+                <g id="路径" transform="translate(115, 0)" fill-rule="nonzero">
+                    <g id="path-10">
+                        <use fill="black" fill-opacity="1" filter="url(#filter-2)" xlink:href="#path-1"></use>
+                        <use fill="#FFFFFF" xlink:href="#path-1"></use>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>
