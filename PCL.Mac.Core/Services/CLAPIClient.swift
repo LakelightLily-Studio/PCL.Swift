@@ -14,10 +14,6 @@ public class CLAPIClient {
     private let apiRoot: URL = .init(string: "https://api.cylorine.studio")!
     private let iso8601DateFormatter: ISO8601DateFormatter = .init()
     
-    public func getCaveMessages() async throws -> [String] {
-        try await get("/cave").arrayValue.map(\.stringValue)
-    }
-    
     public func getEasyTierStatus() async throws -> EasyTierStatus {
         let json: JSON = try await get("/easytier/status")
         if json["available"].boolValue {
