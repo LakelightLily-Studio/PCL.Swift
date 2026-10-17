@@ -194,10 +194,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     guard AppRouter.shared.isSubPage, MessageBoxManager.shared.currentMessageBox == nil else { return }
                     AppRouter.shared.removeLast()
                 }
-            } else {
-                return event
+                return nil
             }
-            return nil
+            return Self.handleDemoShortcut(event) ? nil : event
         }
+    }
+    
+    /// demo 分支专用：⌘R 重播进入动画，1–4 切换顶栏页面。
+    /// 弹窗打开时不拦截，避免抢掉对话框自己的键盘焦点。
+    private static func handleDemoShortcut(_ event: NSEvent) -> Bool {
+        guard MessageBoxManager.shared.currentMessageBox == nil else { return false }
+        
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command, event.charactersIgnoringModifiers?.lowercased() == "r" {
+            DispatchQueue.main.async {
+                DemoState.shared.replayEntryAnimation()
+            }
+            return true
+        }
+        
+        // 无修饰键的数字键。
+        if flags.isEmpty, let index = DemoState.digitKeyCodes.firstIndex(of: event.keyCode) {
+            DispatchQueue.main.async {
+                DemoState.shared.openRootPage(at: index)
+            }
+            return true
+        }
+        return false
     }
 }

@@ -14,6 +14,7 @@ struct ContentView: View {
     @ObservedObject private var router: AppRouter = .shared
     @ObservedObject private var easterEggManager: EasterEggManager = .shared
     @ObservedObject private var themeManager: ThemeManager = .shared
+    @ObservedObject private var demoState: DemoState = .shared
     
     @EnvironmentObject private var instanceManager: InstanceManager
     
@@ -42,8 +43,10 @@ struct ContentView: View {
             .padding(.bottom, 100)
         }
         .background(Color.colorBackground)
-        // 主题色是计算属性，切换后需要重建视图树才能整体换色。
-        .id(themeManager.current)
+        // 主题色是计算属性，切换后需要重建视图树才能整体换色；
+        // demo 分支的 ⌘R 通过 replayToken 复用同一条重建路径来重播进入动画。
+        // 两个 .id() 会互相覆盖（后者胜出），所以合并成一个标识。
+        .id("\(themeManager.current.rawValue)-\(demoState.replayToken)")
         .rotation3DEffect(easterEggManager.rotationAngle, axis: easterEggManager.rotationAxis)
         .contrast(easterEggManager.modifyColor ? -1 : 1)
         .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
