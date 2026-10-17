@@ -31,7 +31,7 @@ struct TitleBarView: View {
                             .scaledToFit()
                             .foregroundStyle(.white)
                             .frame(height: 19)
-                        MyTag("Mac", labelColor: .color2)
+                        MyTag("Swift", labelColor: .color2)
                         
                         if Metadata.debugMode {
                             MyTag("Debug", backgroundColor: Color(0x9BF00B))
