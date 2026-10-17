@@ -16,18 +16,18 @@
   "defaultOptions" : {
     "performanceAntipatternCheckerEnabled" : true,
     "targetForVariableExpansion" : {
-      "containerPath" : "container:PCL.Mac.xcodeproj",
+      "containerPath" : "container:PCL.Swift.xcodeproj",
       "identifier" : "ECC26BC22EBEDD67002B7E3E",
-      "name" : "PCL.Mac"
+      "name" : "PCL.Swift"
     }
   },
   "testTargets" : [
     {
       "parallelizable" : true,
       "target" : {
-        "containerPath" : "container:PCL.Mac.xcodeproj",
+        "containerPath" : "container:PCL.Swift.xcodeproj",
         "identifier" : "EC71A32C2EC034AA006E496F",
-        "name" : "PCL.Mac.Tests"
+        "name" : "PCL.Swift.Tests"
       }
     }
   ],

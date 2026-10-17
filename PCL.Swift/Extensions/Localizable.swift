@@ -8,7 +8,7 @@
 import Foundation
 import Core
 
-// 为 PCL.Mac.Core 中的一些枚举类扩展本地化名或图标，以在 SwiftUI 中显示。
+// 为 PCL.Swift.Core 中的一些枚举类扩展本地化名或图标，以在 SwiftUI 中显示。
 
 protocol Localizable {
     var localizedName: String { get }

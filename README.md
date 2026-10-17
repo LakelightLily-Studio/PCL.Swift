@@ -64,4 +64,4 @@ PCL.Swift 是 [Plain Craft Launcher](https://github.com/Meloong-Git/PCL)（由 [
 
 ## 许可证
 - PCL.Swift 使用与 [PCL](https://github.com/Meloong-Git/PCL) 相同的许可证，并遵守其中关于"重度使用"的规定。
-- PCL.Mac.Core（`PCL.Mac.Core/`）采用 MIT License 协议，使用其代码时请**保留许可证**及署名信息。
+- PCL.Swift.Core（`PCL.Swift.Core/`）采用 MIT License 协议，使用其代码时请**保留许可证**及署名信息。
