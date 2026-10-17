@@ -18,7 +18,7 @@ class ModpackViewModel: ObservableObject {
     @MainActor
     public func importModpack(at url: URL, repository: MinecraftRepository) async {
         guard let curseforgeApiKey = Secrets.shared.curseforgeApiKey else {
-            hint("缺少 CurseForge API Key，无法开始整合包导入，请尝试从官方渠道重新下载 PCL.Mac！", type: .critical)
+            hint("缺少 CurseForge API Key，无法开始整合包导入，请尝试从官方渠道重新下载 PCL.Swift！", type: .critical)
             return
         }
         
@@ -72,13 +72,13 @@ class ModpackViewModel: ObservableObject {
             case .unsupportedModLoader(let name):
                 MessageBoxManager.shared.showText(
                     title: "不支持的模组加载器",
-                    content: "很抱歉，PCL.Mac 暂时不支持安装这个整合包使用的 \(name) 加载器……",
+                    content: "很抱歉，PCL.Swift 暂时不支持安装这个整合包使用的 \(name) 加载器……",
                     level: .error
                 )
             case .unknownFormat:
                 MessageBoxManager.shared.showText(
                     title: "不支持的整合包格式",
-                    content: "很抱歉，PCL.Mac 目前只支持导入 Modrinth、CurseForge、MCBBS 和普通压缩包格式的整合包，不支持这个整合包使用的格式……",
+                    content: "很抱歉，PCL.Swift 目前只支持导入 Modrinth、CurseForge、MCBBS 和普通压缩包格式的整合包，不支持这个整合包使用的格式……",
                     level: .error
                 )
             default:

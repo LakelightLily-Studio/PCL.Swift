@@ -42,7 +42,7 @@ class UpdateService {
             }
             
             let result = await MessageBoxManager.shared.showTextAsync(
-                title: "PCL.Mac 有更新可用",
+                title: "PCL.Swift 有更新可用",
                 content: "发现新版本：\(version.name)\n更新摘要：\(version.summary)\n\n是否下载并安装更新？",
                 level: .info,
                 buttons: version.updateLogLinks.enumerated().map { index, link in
@@ -64,7 +64,7 @@ class UpdateService {
                 return
             }
             
-            hint("正在下载并安装更新，完成后 PCL.Mac 会自动重启……")
+            hint("正在下载并安装更新，完成后 PCL.Swift 会自动重启……")
             do {
                 let useMirror = await LocaleUtils.isInChinaMainland(strict: false)
                 try await UpdateManager.shared.installUpdate(version, useMirror: useMirror)

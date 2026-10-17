@@ -6,10 +6,12 @@
       "scale" : "1x"
     },
     {
+      "filename" : "CylorineStudio@2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
+      "filename" : "CylorineStudio@3x.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

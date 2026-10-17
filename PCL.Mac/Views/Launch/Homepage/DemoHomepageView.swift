@@ -96,7 +96,7 @@ struct DemoHomepageView: View {
                     MyButton("错误弹窗", type: .red) {
                         MessageBoxManager.shared.showText(
                             title: "Minecraft 发生崩溃",
-                            content: "你的游戏发生了一些问题，无法继续运行。\n很抱歉，PCL.Mac 暂时没有崩溃分析功能……\n\n若要寻求帮助，请点击“导出崩溃报告”并将导出的文件发给他人，而不是发送关于此页面的图片！！！",
+                            content: "你的游戏发生了一些问题，无法继续运行。\n很抱歉，PCL.Swift 暂时没有崩溃分析功能……\n\n若要寻求帮助，请点击“导出崩溃报告”并将导出的文件发给他人，而不是发送关于此页面的图片！！！",
                             level: .error
                         )
                     }

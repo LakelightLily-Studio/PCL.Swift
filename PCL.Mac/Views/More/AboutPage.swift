@@ -26,12 +26,11 @@ struct AboutPage: View {
                                 .init("GitHub 主页", "https://github.com/functy23"))
                     
                     ProfileView(.local(.cylorineStudio), "Cylorine Studio", "PCL.Mac 的开发团队",
-                                .init("GitHub 主页", "https://github.com/CylorineStudio"),
-                                .init("官方网站", "https://cylorine.studio"))
+                                .init("GitHub 主页", "https://github.com/CylorineStudio"))
                     
                     ProfileView(.local(.pclMac), "PCL.Swift", "当前版本：\(Metadata.appVersion) (\(Metadata.bundleVersion))",
-                                .init("GitHub 仓库", "https://github.com/CylorineStudio/PCL.Mac.Refactor"),
-                                .init("官网页面", "https://cylorine.studio/projects/PCL.Mac.Refactor"))
+                                .init("GitHub 仓库", "https://github.com/functy23/PCL.Swift"),
+                                .init("问题反馈", "https://github.com/functy23/PCL.Swift/issues"))
                 }
             }
             

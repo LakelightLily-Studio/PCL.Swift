@@ -24,7 +24,7 @@ public class MinecraftLauncher {
         self.logURL = URLConstants.tempURL.appending(path: "game-log-\(UUID().uuidString.lowercased()).log")
         self.values = [
             "natives_directory": runningDirectory.appending(path: "natives").path,
-            "launcher_name": "PCL.Mac",
+            "launcher_name": "PCL.Swift",
             "launcher_version": Metadata.appVersion,
             "classpath_separator": ":",
             "library_directory": librariesURL.path,
@@ -38,7 +38,7 @@ public class MinecraftLauncher {
             "auth_access_token": options.accessToken,
             "auth_session": options.accessToken,
             "user_type": "msa",
-            "version_type": "PCL.Mac",
+            "version_type": "PCL.Swift",
             "user_properties": "{}"
         ]
     }

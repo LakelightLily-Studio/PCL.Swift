@@ -28,7 +28,7 @@ struct ToolboxPage: View {
                     MyButton("千万别点", type: .red) {
                         MessageBoxManager.shared.showText(
                             title: "警告",
-                            content: "PCL.Mac 作者不会受理由于点击千万别点造成的任何 Bug。\n这是最后的警告，是否继续操作？",
+                            content: "PCL.Swift 作者不会受理由于点击千万别点造成的任何 Bug。\n这是最后的警告，是否继续操作？",
                             level: .error,
                             .init(id: 0, label: "确定", type: .red),
                             .init(id: 1, label: "确定", type: .normal),

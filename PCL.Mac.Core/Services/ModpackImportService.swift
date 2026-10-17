@@ -159,7 +159,7 @@ public class ModpackImportService {
                 name: instanceName,
                 version: "未知",
                 author: nil,
-                description: "这只是一个包含 .minecraft 的压缩包，所以 PCL.Mac 无法获取它的信息，但依然可以导入它。",
+                description: "这只是一个包含 .minecraft 的压缩包，所以 PCL.Swift 无法获取它的信息，但依然可以导入它。",
                 minecraftVersion: nil,
                 modLoader: nil,
                 files: [],
