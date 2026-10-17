@@ -93,6 +93,9 @@ class LauncherConfig: Codable {
     public var customJavaRuntimes: [URL] = [] {
         didSet { LauncherConfig.markDirty() }
     }
+    public var theme: Theme = .themeOrange {
+        didSet { LauncherConfig.markDirty() }
+    }
     
     public init() {}
     
@@ -120,6 +123,9 @@ class LauncherConfig: Codable {
         self.homepageType = try container.decodeIfPresent(HomepageType.self, forKey: .homepageType) ?? .empty
         self.enabledFlags = try container.decodeIfPresent(Set<FeatureFlag>.self, forKey: .enabledFlags)
         self.customJavaRuntimes = try container.decodeIfPresent([URL].self, forKey: .customJavaRuntimes) ?? []
+        // 主题名改过一次（default/swiftOrange → themeBlue/themeOrange），
+        // 旧值解码失败时退回默认主题，而不是让整份配置解码失败。
+        self.theme = (try? container.decodeIfPresent(Theme.self, forKey: .theme)) ?? .themeOrange
     }
     
     public func encode(to encoder: any Encoder) throws {
@@ -138,6 +144,7 @@ class LauncherConfig: Codable {
         try container.encode(homepageType, forKey: .homepageType)
         try container.encodeIfPresent(enabledFlags, forKey: .enabledFlags)
         try container.encode(customJavaRuntimes, forKey: .customJavaRuntimes)
+        try container.encode(theme, forKey: .theme)
     }
     
     /// 合并短时间内的多次变更，避免每个字段改动都触发一次写盘。
@@ -195,6 +202,7 @@ class LauncherConfig: Codable {
         case homepageType
         case enabledFlags
         case customJavaRuntimes
+        case theme
     }
     
     enum HomepageType: String, Codable, CustomStringConvertible {

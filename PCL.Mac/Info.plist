@@ -6,10 +6,21 @@
 	<string>$(DEBUG_MODE)</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- 所有下载源与 API 均已使用 https；调试模式下保留全局放行，
-		     便于临时指向本地 http 服务排查问题。 -->
-		<key>NSAllowsArbitraryLoads</key>
-		<string>$(DEBUG_MODE)</string>
+		<!-- Mojang 的皮肤纹理服务只提供 http:// 地址（sessionserver 返回的
+		     textures 属性里就是 http），https 虽然也能访问，但为了不依赖这一点，
+		     这里按域名放行。注意必须是真正的布尔值：此前写成
+		     <string>$(DEBUG_MODE)</string>，ATS 不认字符串，等于一直是关的，
+		     连 Debug 构建都被拦。 -->
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>textures.minecraft.net</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
 </dict>
 </plist>

@@ -9,8 +9,10 @@ import SwiftUI
 import Core
 
 struct LauncherSettingsPage: View {
+    @ObservedObject private var themeManager: ThemeManager = .shared
     @State private var downloadSourcePolicy: DownloadSourcePolicy = LauncherConfig.shared.downloadSourcePolicy
     @State private var homepageType: LauncherConfig.HomepageType = LauncherConfig.shared.homepageType
+    @State private var theme: Theme = ThemeManager.shared.current
     
     var body: some View {
         CardContainer {
@@ -36,6 +38,16 @@ struct LauncherSettingsPage: View {
                 }
                 .onChange(of: homepageType) { newValue in
                     LauncherConfig.shared.homepageType = newValue
+                }
+                
+                configLine(label: "主题色") {
+                    MySelect(
+                        $theme,
+                        entries: Theme.allCases
+                    )
+                }
+                .onChange(of: theme) { newValue in
+                    themeManager.set(newValue)
                 }
             }
             .cardIndex(1)

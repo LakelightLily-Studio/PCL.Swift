@@ -13,6 +13,7 @@ struct ContentView: View {
     @ObservedObject private var hintManager: HintManager = .shared
     @ObservedObject private var router: AppRouter = .shared
     @ObservedObject private var easterEggManager: EasterEggManager = .shared
+    @ObservedObject private var themeManager: ThemeManager = .shared
     
     @EnvironmentObject private var instanceManager: InstanceManager
     
@@ -40,7 +41,9 @@ struct ContentView: View {
             .animation(.easeOut(duration: 0.2), value: hintManager.hints)
             .padding(.bottom, 100)
         }
-        .background(Color(0xC0DEF5))
+        .background(Color.colorBackground)
+        // 主题色是计算属性，切换后需要重建视图树才能整体换色。
+        .id(themeManager.current)
         .rotation3DEffect(easterEggManager.rotationAngle, axis: easterEggManager.rotationAxis)
         .contrast(easterEggManager.modifyColor ? -1 : 1)
         .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
