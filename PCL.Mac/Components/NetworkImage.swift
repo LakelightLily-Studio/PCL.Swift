@@ -24,7 +24,7 @@ struct NetworkImage: View {
         imageView
             .task(id: url) {
                 do {
-                    let data: Data = try await HTTPClient.shared.get(url).data
+                    let data: Data = try await Self.loadData(from: url)
                     let nsImage = try makeImage(from: data)
                     await MainActor.run {
                         withAnimation(nil) {
@@ -50,6 +50,17 @@ struct NetworkImage: View {
                 .interpolation(.none)
                 .scaledToFit()
         }
+    }
+
+    /// 读取图片数据。
+    ///
+    /// `file://` 走本地读取：`HTTPClient` 只接受 http/https，演示用的本地图标
+    /// 是打包进 App 的文件，不能走它。
+    private static func loadData(from url: URL) async throws -> Data {
+        if url.isFileURL {
+            return try Data(contentsOf: url)
+        }
+        return try await HTTPClient.shared.get(url).data
     }
 
     private func makeImage(from data: Data) throws -> NSImage {
