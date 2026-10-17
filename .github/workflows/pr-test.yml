@@ -5,10 +5,10 @@ on:
     paths:
       - "Configs/**"
       - ".github/workflows/**"
-      - "PCL.Mac/**"
-      - "PCL.Mac.Core/**"
-      - "PCL.Mac.Tests/**"
-      - "PCL.Mac.xcodeproj/**"
+      - "PCL.Swift/**"
+      - "PCL.Swift.Core/**"
+      - "PCL.Swift.Tests/**"
+      - "PCL.Swift.xcodeproj/**"
       - "Resources/**"
 
 jobs:
@@ -30,8 +30,8 @@ jobs:
       - name: Run tests
         run: |
           xcodebuild test \
-            -project PCL.Mac.xcodeproj \
-            -scheme PCL.Mac \
+            -project PCL.Swift.xcodeproj \
+            -scheme PCL.Swift \
             -destination 'platform=macOS' \
             -resultBundlePath ./result.xcresult
 

@@ -7,7 +7,7 @@
 
 import Foundation
 import Testing
-@testable import PCL_Mac
+@testable import PCL_Swift
 import Core
 
 struct DemoResourceCatalogTests {

@@ -43,16 +43,16 @@ echo "swiftc: $SWIFTC"
 case "$ACTION" in
     build)
         exec xcodebuild build \
-            -project PCL.Mac.xcodeproj \
-            -scheme PCL.Mac \
+            -project PCL.Swift.xcodeproj \
+            -scheme PCL.Swift \
             -configuration "$CONFIGURATION" \
             -destination 'platform=macOS' \
             SWIFT_EXEC="$SWIFTC"
         ;;
     test)
         exec xcodebuild test \
-            -project PCL.Mac.xcodeproj \
-            -scheme PCL.Mac \
+            -project PCL.Swift.xcodeproj \
+            -scheme PCL.Swift \
             -destination 'platform=macOS' \
             SWIFT_EXEC="$SWIFTC"
         ;;

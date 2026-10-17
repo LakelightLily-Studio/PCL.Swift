@@ -8,11 +8,13 @@
 
 PCL.Swift 是 [Plain Craft Launcher](https://github.com/Meloong-Git/PCL)（Minecraft 启动器）的**非官方** macOS 重构版，
 SwiftUI 实现，源自 Cylorine Studio 的 PCL.Mac.Refactor 1.1.1。许可证沿用上游 PCL 的条款；
-`PCL.Mac.Core/` 单独采用 MIT，复用其代码必须保留 `PCL.Mac.Core/LICENSE` 与署名。
+`PCL.Swift.Core/` 单独采用 MIT，复用其代码必须保留 `PCL.Swift.Core/LICENSE` 与署名。
 
-目录名、Target 名、模块名（`PCL.Mac` / `PCL.Mac.Core` / `import Core`）与数据目录
-`~/Library/Application Support/PCL.Mac.Refactor/` **保持原样**：改名会破坏已有用户的配置迁移、
-CI 产物路径和 Xcode 工程引用，收益为零。只有面向用户的品牌文案用 PCL.Swift。
+目录名（`PCL.Swift/` / `PCL.Swift.Core/` / `PCL.Swift.Tests/`）、Target 名与工程名都随 2.0 改成了
+PCL.Swift；只有 **Swift 模块名仍是 `Core`**（`import Core`），改它要动几百处 import，收益为零。
+
+数据目录在 2.0 由 `PCL.Mac.Refactor` 改名为 `PCL.Swift`，`URLConstants` 里带一次性迁移：
+旧目录存在且新目录不存在时整体 move 过去，迁移失败则继续用旧目录，避免用户丢数据。
 
 - 最低系统：App 与 Core 为 macOS 12.0，测试 Target 为 14.0（见 `Configs/*.xcconfig` 与 pbxproj）。
 - 同时支持 Intel 与 Apple Silicon，不要引入只对单一架构成立的假设。
@@ -22,7 +24,7 @@ CI 产物路径和 Xcode 工程引用，收益为零。只有面向用户的品�
 ## 构建与测试
 
 用 Xcode 工程，没有 SwiftPM 包清单（依赖走 Xcode 的 SPM 集成，锁定在
-`PCL.Mac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`）。
+`PCL.Swift.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`）。
 
 ```bash
 # 推荐：用 `Scripts/xcodebuild-swift.sh`，它会自动挑可用的 Swift 工具链
@@ -31,13 +33,13 @@ Scripts/xcodebuild-swift.sh build Release
 Scripts/xcodebuild-swift.sh test
 
 # 等价的原始命令（Swift 6.4 工具链）
-xcodebuild build -project PCL.Mac.xcodeproj -scheme PCL.Mac -configuration Debug \
+xcodebuild build -project PCL.Swift.xcodeproj -scheme PCL.Swift -configuration Debug \
   -destination 'platform=macOS' \
   SWIFT_EXEC=/Library/Developer/Toolchains/swift-latest.xctoolchain/usr/bin/swiftc
 
 # 只跑单元测试 Target
-xcodebuild test -project PCL.Mac.xcodeproj -scheme PCL.Mac -destination 'platform=macOS' \
-  -only-testing:PCL.Mac.Tests
+xcodebuild test -project PCL.Swift.xcodeproj -scheme PCL.Swift -destination 'platform=macOS' \
+  -only-testing:PCL.Swift.Tests
 ```
 
 ### 必须用 Swift 6.4，不能用 Xcode 自带的 6.0
@@ -60,7 +62,7 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
 测试相关的事实：
 
 - 测试框架是 **swift-testing**（`import Testing`、`@Test`、`#expect`），不是 XCTest。新增测试不要混入 XCTest。
-- 测试 Target 会以 `PCL_MAC_TESTING=1` 启动宿主 App（见 `Configs/PCL.Mac.xctestplan`）。`AppDelegate.shouldInit`
+- 测试 Target 会以 `PCL_MAC_TESTING=1` 启动宿主 App（见 `Configs/PCL.Swift.xctestplan`）。`AppDelegate.shouldInit`
   据此跳过窗口、字体、缓存等真实初始化；**新增启动期副作用时必须尊重这个开关**，否则测试会去碰用户的
   `~/Library/Application Support`。
 - 依赖真实网络的测试用 `TestEnvironment.networkAvailable`（`@Test(.enabled(if:))`）门控，默认跳过；
@@ -72,13 +74,13 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
 
 | 目录 | 内容 | 注意 |
 |---|---|---|
-| `PCL.Mac.Core/` | 与 UI 无关的核心逻辑：模型、下载、认证、Minecraft/Forge/NeoForge 安装、资源解析、任务系统 | 独立模块 `import Core`；**不得 import SwiftUI/AppKit 做 UI**；改动需保持 macOS 12.0 可用 |
-| `PCL.Mac/` | App 本体：SwiftUI 视图、路由、AppDelegate、启动器配置 | 依赖 Core，反向依赖不允许 |
-| `PCL.Mac.Tests/` | swift-testing 测试 | 只测可测的部分：纯逻辑、解析、编排；UI 不写快照测试 |
-| `Configs/` | `Base/Debug/Release.xcconfig` 与 `PCL.Mac.xctestplan` | 版本号、`DEBUG_MODE` 在这里定义 |
+| `PCL.Swift.Core/` | 与 UI 无关的核心逻辑：模型、下载、认证、Minecraft/Forge/NeoForge 安装、资源解析、任务系统 | 独立模块 `import Core`；**不得 import SwiftUI/AppKit 做 UI**；改动需保持 macOS 12.0 可用 |
+| `PCL.Swift/` | App 本体：SwiftUI 视图、路由、AppDelegate、启动器配置 | 依赖 Core，反向依赖不允许 |
+| `PCL.Swift.Tests/` | swift-testing 测试 | 只测可测的部分：纯逻辑、解析、编排；UI 不写快照测试 |
+| `Configs/` | `Base/Debug/Release.xcconfig` 与 `PCL.Swift.xctestplan` | 版本号、`DEBUG_MODE` 在这里定义 |
 | `Resources/` | `Localizable.xcstrings`、字体、`Secrets.properties`、第三方 LICENSE | 见下方"密钥" |
 | `Packaging/` | DMG 背景图与 `.DS_Store` 布局 | 由 `release.yml` 使用 |
-| `PCL.Mac.xcodeproj/` | 工程文件 | **用 FileSystemSynchronizedRootGroup**：新增 `.swift` 文件放进目录树即自动入 Target，不要再手工加 `PBXBuildFile` |
+| `PCL.Swift.xcodeproj/` | 工程文件 | **用 FileSystemSynchronizedRootGroup**：新增 `.swift` 文件放进目录树即自动入 Target，不要再手工加 `PBXBuildFile` |
 
 ## 编码约定（代码里看不出的取舍）
 
@@ -104,9 +106,9 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
 ## 密钥与配置
 
 - `Resources/Secrets.properties` 是**模板**，仓库里只有空占位，禁止提交真实凭据。
-  CI 在构建前按 secrets 重写该文件；本地可用环境变量 `PCLMAC_<KEY>` 覆盖（见 `PCL.Mac/App/Secrets.swift`）。
-- 用户数据落在 `~/Library/Application Support/PCL.Mac.Refactor/`（`config.json`、`Logs`、`Caches`、`Temp`），
-  路径常量在 `PCL.Mac.Core/Utils/URLConstants.swift`，不要散落硬编码。
+  CI 在构建前按 secrets 重写该文件；本地可用环境变量 `PCLMAC_<KEY>` 覆盖（见 `PCL.Swift/App/Secrets.swift`）。
+- 用户数据落在 `~/Library/Application Support/PCL.Swift/`（`config.json`、`Logs`、`Caches`、`Temp`），
+  路径常量在 `PCL.Swift.Core/Utils/URLConstants.swift`，不要散落硬编码。
 
 ## 提交与 PR
 

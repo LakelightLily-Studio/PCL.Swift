@@ -1,6 +1,6 @@
 //
 //  MinecraftProfileService.swift
-//  PCL.Mac.Core
+//  PCL.Swift.Core
 //
 //  Created by Wunanc on 2026/8/10.
 //
