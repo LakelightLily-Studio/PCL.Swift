@@ -6,9 +6,13 @@
 
 ## 项目是什么
 
-PCL.Mac 是 [Plain Craft Launcher](https://github.com/Meloong-Git/PCL)（Minecraft 启动器）的**非官方** macOS 重构版，
-SwiftUI 实现。许可证沿用上游 PCL 的条款；`PCL.Mac.Core/` 单独采用 MIT，复用其代码必须保留
-`PCL.Mac.Core/LICENSE` 与署名。
+PCL.Swift 是 [Plain Craft Launcher](https://github.com/Meloong-Git/PCL)（Minecraft 启动器）的**非官方** macOS 重构版，
+SwiftUI 实现，源自 Cylorine Studio 的 PCL.Mac.Refactor 1.1.1。许可证沿用上游 PCL 的条款；
+`PCL.Mac.Core/` 单独采用 MIT，复用其代码必须保留 `PCL.Mac.Core/LICENSE` 与署名。
+
+目录名、Target 名、模块名（`PCL.Mac` / `PCL.Mac.Core` / `import Core`）与数据目录
+`~/Library/Application Support/PCL.Mac.Refactor/` **保持原样**：改名会破坏已有用户的配置迁移、
+CI 产物路径和 Xcode 工程引用，收益为零。只有面向用户的品牌文案用 PCL.Swift。
 
 - 最低系统：App 与 Core 为 macOS 12.0，测试 Target 为 14.0（见 `Configs/*.xcconfig` 与 pbxproj）。
 - 同时支持 Intel 与 Apple Silicon，不要引入只对单一架构成立的假设。
@@ -21,16 +25,37 @@ SwiftUI 实现。许可证沿用上游 PCL 的条款；`PCL.Mac.Core/` 单独采
 `PCL.Mac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`）。
 
 ```bash
-# 跑测试（与 CI 一致）
-xcodebuild test -project PCL.Mac.xcodeproj -scheme PCL.Mac -destination 'platform=macOS'
+# 推荐：用 `Scripts/xcodebuild-swift.sh`，它会自动挑可用的 Swift 工具链
+Scripts/xcodebuild-swift.sh build Debug
+Scripts/xcodebuild-swift.sh build Release
+Scripts/xcodebuild-swift.sh test
+
+# 等价的原始命令（Swift 6.4 工具链）
+xcodebuild build -project PCL.Mac.xcodeproj -scheme PCL.Mac -configuration Debug \
+  -destination 'platform=macOS' \
+  SWIFT_EXEC=/Library/Developer/Toolchains/swift-latest.xctoolchain/usr/bin/swiftc
 
 # 只跑单元测试 Target
 xcodebuild test -project PCL.Mac.xcodeproj -scheme PCL.Mac -destination 'platform=macOS' \
   -only-testing:PCL.Mac.Tests
-
-# Debug 构建
-xcodebuild build -project PCL.Mac.xcodeproj -scheme PCL.Mac -configuration Debug
 ```
+
+### 必须用 Swift 6.4，不能用 Xcode 自带的 6.0
+
+源码里用了 **Swift 6.1+ 才支持的调用参数尾随逗号**（`f(a, b,)`），Xcode 16.0 自带的
+Swift 6.0 会直接报 `unexpected ',' separator`；此外 `MinecraftRepository` 里不写 `of:`
+的 `withTaskGroup` 也依赖新编译器的推断。两者都不是 bug，**不要为了迁就旧编译器去删它们**。
+
+命令行下选工具链有三个坑（都实测过）：
+
+| 写法 | 结果 |
+|---|---|
+| `TOOLCHAINS=swift-6.4.0-RELEASE` | 无效。目录名不是合法标识符，被静默忽略，仍用 6.0 |
+| `TOOLCHAINS=swift-latest` / `xcodebuild -toolchain ...` | 同样无效 |
+| `TOOLCHAINS=org.swift.640202609131a` | 标识符对了，但 SPM 解析阶段因 `-disallow-use-new-driver` 直接崩 |
+| **`SWIFT_EXEC=<6.4 的 swiftc>`** | ✅ 唯一可靠；保留 Xcode 的 SDK/clang，SPM 正常 |
+
+Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径，与命令行不同。
 
 测试相关的事实：
 
