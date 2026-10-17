@@ -14,8 +14,7 @@ struct AboutPage: View {
             MyCard("关于", foldable: false) {
                 VStack(spacing: 0) {
                     ProfileView(.local(.ltCatt), "龙腾猫跃", "Plain Craft Launcher 的作者！",
-                                .init("GitHub 主页", "https://github.com/LTCatt"),
-                                .init("前往赞助", "https://afdian.com/a/LTCat"))
+                                .init("GitHub 主页", "https://github.com/LTCatt"))
                     
                     ProfileView(.local(.anemoFlower), "风花AnemoFlower", "PCL.Mac 的作者",
                                 .init("GitHub 主页", "https://github.com/AnemoFlower"),
@@ -44,8 +43,7 @@ struct AboutPage: View {
                     ProfileView(.local(.pclProto), "PCL.Proto", "以 PCL2 和 PCL2-CE 为蓝本，旨在为各 PCL 分支版本提供一个标准化的原型样本。",
                                 .init("GitHub 仓库", "https://github.com/PCL-Community/PCL.Proto"))
                     
-                    ProfileView(.local(.bangbang93), "bangbang93", "提供 BMCLAPI 镜像源，详见 https://bmclapi.bangbang93.com",
-                                .init("前往赞助", "https://afdian.com/a/bangbang93"))
+                    ProfileView(.local(.bangbang93), "bangbang93", "提供 BMCLAPI 镜像源，详见 https://bmclapi.bangbang93.com")
                 }
             }
             
