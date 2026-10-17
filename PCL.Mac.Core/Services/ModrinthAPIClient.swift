@@ -135,5 +135,13 @@ public class ModrinthAPIClient {
         public let offset: Int
         public let limit: Int
         public let totalHits: Int
+        
+        /// 供本地数据源构造响应；网络路径仍走 Decodable。
+        public init(hits: [ModrinthProject], offset: Int, limit: Int, totalHits: Int) {
+            self.hits = hits
+            self.offset = offset
+            self.limit = limit
+            self.totalHits = totalHits
+        }
     }
 }

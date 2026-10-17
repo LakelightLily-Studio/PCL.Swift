@@ -30,7 +30,11 @@ class ResourcesSearchViewModel: ObservableObject {
             loadingVM.reset()
             searchResults = nil
         }
-        let response: ModrinthAPIClient.SearchResponse = try await ModrinthAPIClient.shared.search(type: type, query, forVersion: nil, pageIndex: pageIndex)
+        let response: ModrinthAPIClient.SearchResponse = try await DemoResourceCatalog.shared.search(
+            type: type,
+            query,
+            pageIndex: pageIndex
+        )
         await MainActor.run {
             lastSearchResponse = response
             searchResults = response.hits.filter { $0.clientCompatibility != .unsupported }.map(ProjectListItemModel.init(_:))
