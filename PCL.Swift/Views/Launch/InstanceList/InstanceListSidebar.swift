@@ -26,12 +26,20 @@ struct InstanceListSidebar: Sidebar {
                     .padding(.leading, 13)
                     .padding(.top, 18)
                 MyNavigationList(
-                    routeList: instanceVM.repositories.map { .init(AppRoute.instanceList(repositoryId: $0.id), nil, $0.name) }
+                    routeList: instanceVM.repositories.map {
+                        .init(AppRoute.instanceList(repositoryId: $0.id), nil, $0.name)
+                    } + [.init(AppRoute.dshInstanceList, nil, "DSH")]
                 ) { route in
-                    guard case .instanceList(let repositoryId) = route,
-                          case .instanceList(let currentRepositoryId) = AppRouter.shared.last,
-                          repositoryId == currentRepositoryId else { return }
-                    instanceVM.reload(repository: instanceVM.currentRepository)
+                    switch route {
+                    case .instanceList(let repositoryId):
+                        guard case .instanceList(let currentRepositoryId) = AppRouter.shared.last,
+                              repositoryId == currentRepositoryId else { return }
+                        // 点 Minecraft 目录即视为离开 DSH，启动页按钮随之还原。
+                        DSHSelection.shared.leave()
+                        instanceVM.reload(repository: instanceVM.currentRepository)
+                    default:
+                        return
+                    }
                 }
             }
             MyText("添加或导入", size: 12, color: .colorGray3)

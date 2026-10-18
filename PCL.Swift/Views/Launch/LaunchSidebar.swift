@@ -12,6 +12,7 @@ struct LaunchSidebar: Sidebar {
     @StateObject private var instanceVM: InstanceViewModel
     @StateObject private var accountVM: AccountViewModel = .init()
     @StateObject private var launchVM: LaunchViewModel = .init()
+    @ObservedObject private var dshSelection: DSHSelection = .shared
     @State private var addingYggdrasilAccount: Bool = false
 
     @State private var showToolbar: Bool = false
@@ -61,7 +62,16 @@ struct LaunchSidebar: Sidebar {
             Spacer()
             VStack(spacing: 11) {
                 Group {
-                    if let instance = instanceVM.currentInstance {
+                    // 当前目录若是 DSH，启动按钮改为拉起 DSH。
+                    if dshSelection.isCurrentDirectory {
+                        MyButton("启动 DSH", subLabel: dshSelection.instance?.version ?? "未检测到", type: .highlight) {
+                            guard let dsh = dshSelection.instance else {
+                                hint("未检测到 DSH，请先在实例选择里重新检测。", type: .critical)
+                                return
+                            }
+                            DSHLaunchManager.shared.launch(dsh)
+                        }
+                    } else if let instance = instanceVM.currentInstance {
                         MyButton("启动游戏", subLabel: instance.name, type: .highlight) {
                             guard !launchVM.isRunning && !launchVM.isLaunching else {
                                 hint("已有一个游戏实例正在运行！", type: .critical)
@@ -84,6 +94,7 @@ struct LaunchSidebar: Sidebar {
                 .frame(height: 50)
                 HStack(spacing: 11) {
                     MyButton("实例选择") {
+                        dshSelection.leave()
                         AppRouter.shared.append(.instanceList(repositoryId: instanceVM.currentRepository.id))
                     }
                     if let instance = instanceVM.currentInstance {
