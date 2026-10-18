@@ -101,7 +101,11 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
   视图侧改尺寸会被 `minSize == maxSize` 顶回去。
 - 更新检查（`UpdateService.runInteractiveUpdateFlow`）依赖 `ContentView` 里的弹窗层，只在进入 `.launcher` 后发起；
   欢迎弹窗同理，只在 `.launcher` 阶段显示。
-- demo 分支的 ⌘R 会重播整段开场（`StartupFlow.restartOnboarding()`），合回 main 前连同 `DemoState` 一起删。
+- **demo 与 main 只差演示功能**，其余（首启流程、DSH、窗口修复等）两边必须一致。demo 额外带的只有：
+  `DemoState`（⌘R 重播开场 + 1–4 切顶栏页）、`DemoResourceCatalog`（资源列表读打包快照）、
+  `Resources/demo/` 图标，以及它们依赖的三处改动（`ModrinthAPIClient.SearchResponse` 的公开 init、
+  `ResourcesSearchViewModel` 换数据源、`NetworkImage` 支持 `file://`）。
+  **同步时把这几处连同 demo 专用文件一起留在 demo，不要带进 main。**
 - 开场动画里不能再用 13+ 才有的 API（`AnyLayout`、`.bouncy`、`.rect`）：App 的最低部署目标是 12.0，
   动画改成了 `.interpolatingSpring` + 手写分支布局。
 - 品牌标识分两处，**不要互相挪用**：开场动画用 `iconAppIcon`（App 图标本体）；启动器标题栏用
