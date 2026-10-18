@@ -12,6 +12,8 @@ struct LaunchSidebar: Sidebar {
     @StateObject private var instanceVM: InstanceViewModel
     @StateObject private var accountVM: AccountViewModel = .init()
     @StateObject private var launchVM: LaunchViewModel = .init()
+    @ObservedObject private var dshSelection: DSHSelection = .shared
+    @ObservedObject private var dshLaunchManager: DSHLaunchManager = .shared
     @State private var addingYggdrasilAccount: Bool = false
 
     @State private var showToolbar: Bool = false
@@ -34,11 +36,59 @@ struct LaunchSidebar: Sidebar {
         )
 
     var body: some View {
-        if launchVM.isLaunching {
+        if dshLaunchManager.isLaunching {
+            dshLaunchingBody
+        } else if launchVM.isLaunching {
             launchingBody
         } else {
             normalBody
         }
+    }
+
+    /// DSH 的启动动画。形态与 Minecraft 的 `launchingBody` 一致：
+    /// 进度条 + 当前步骤 + 取消按钮，让启动过程有可见反馈。
+    private var dshLaunchingBody: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            MyLoading(viewModel: dshLaunchManager.loadingViewModel, showCard: false)
+            if let name = dshLaunchManager.instanceName {
+                MyText(name, size: 13.5, color: .color3)
+                    .padding(.top, 5)
+            }
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(
+                        LinearGradient(stops: [
+                            .init(color: Color.color4, location: 0),
+                            .init(color: Color.color3, location: 0.6)
+                        ], startPoint: .topLeading, endPoint: .topTrailing)
+                    )
+                    .frame(width: 225 * dshLaunchManager.progress)
+                Rectangle()
+                    .fill(Color.color6)
+                    .opacity(0.6)
+            }
+            .frame(width: 225, height: 4)
+            .padding(.top, 12)
+            .padding(.bottom, 27)
+
+            VStack(alignment: .leading) {
+                if let stage = dshLaunchManager.currentStage {
+                    launchingInfo(name: "当前步骤", value: stage)
+                }
+                launchingInfo(name: "启动进度") {
+                    AnimatablePercentText(progress: dshLaunchManager.progress)
+                }
+            }
+
+            Spacer()
+            MyButton("取消") {
+                dshLaunchManager.cancel()
+            }
+            .frame(height: 32)
+            .padding(21)
+        }
+        .animation(.easeOut(duration: 0.2), value: dshLaunchManager.progress)
     }
 
     private var normalBody: some View {
@@ -61,7 +111,16 @@ struct LaunchSidebar: Sidebar {
             Spacer()
             VStack(spacing: 11) {
                 Group {
-                    if let instance = instanceVM.currentInstance {
+                    // 当前目录若是 DSH，启动按钮改为拉起 DSH。
+                    if dshSelection.isCurrentDirectory {
+                        MyButton("启动 DSH", subLabel: dshSelection.instance?.version ?? "未检测到", type: .highlight) {
+                            guard let dsh = dshSelection.instance else {
+                                hint("未检测到 DSH，请先在实例选择里重新检测。", type: .critical)
+                                return
+                            }
+                            DSHLaunchManager.shared.launch(dsh)
+                        }
+                    } else if let instance = instanceVM.currentInstance {
                         MyButton("启动游戏", subLabel: instance.name, type: .highlight) {
                             guard !launchVM.isRunning && !launchVM.isLaunching else {
                                 hint("已有一个游戏实例正在运行！", type: .critical)
@@ -84,6 +143,7 @@ struct LaunchSidebar: Sidebar {
                 .frame(height: 50)
                 HStack(spacing: 11) {
                     MyButton("实例选择") {
+                        dshSelection.leave()
                         AppRouter.shared.append(.instanceList(repositoryId: instanceVM.currentRepository.id))
                     }
                     if let instance = instanceVM.currentInstance {

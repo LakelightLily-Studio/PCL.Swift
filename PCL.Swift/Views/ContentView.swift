@@ -63,24 +63,31 @@ private struct ExtraButtonsOverlay: View {
     @ObservedObject private var router: AppRouter = .shared
     @ObservedObject private var launchManager: MinecraftLaunchManager = .shared
     @ObservedObject private var taskManager: TaskManager = .shared
+    @ObservedObject private var dshManager: DSHLaunchManager = .shared
     
     var body: some View {
         VStack(spacing: 0) {
             ExtraButton(.iconDownloadPage, showTasksButton) {
                 router.append(.tasks)
             }
-            ExtraButton(.iconPower, launchManager.isRunning) {
-                launchManager.stop()
-                if launchManager.isLaunching {
-                    hint("已取消启动！", type: .finish)
+            // Minecraft 与 DSH 共用这颗电源按钮，谁在跑就停谁。
+            ExtraButton(.iconPower, launchManager.isRunning || dshManager.isRunning) {
+                if dshManager.isRunning {
+                    dshManager.stop()
                 } else {
-                    hint("已关闭游戏！", type: .finish)
+                    launchManager.stop()
+                    if launchManager.isLaunching {
+                        hint("已取消启动！", type: .finish)
+                    } else {
+                        hint("已关闭游戏！", type: .finish)
+                    }
                 }
             }
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .animation(.spring(response: 0.4), value: launchManager.isRunning)
+        .animation(.spring(response: 0.4), value: dshManager.isRunning)
         .animation(.spring(response: 0.4), value: showTasksButton)
     }
     

@@ -193,6 +193,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             LauncherConfig.flush()
         }
         EasyTierManager.shared.terminateAll()
+        // 由本启动器起的 DSH 必须跟着一起退出，避免留下孤儿进程。
+        DSHLaunchManager.shared.terminateAll()
     }
     
     private func addEscapeMonitor() {
