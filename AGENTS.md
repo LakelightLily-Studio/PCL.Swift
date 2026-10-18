@@ -82,6 +82,41 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
 | `Packaging/` | DMG 背景图与 `.DS_Store` 布局 | 由 `release.yml` 使用 |
 | `PCL.Swift.xcodeproj/` | 工程文件 | **用 FileSystemSynchronizedRootGroup**：新增 `.swift` 文件放进目录树即自动入 Target，不要再手工加 `PBXBuildFile` |
 
+## 首次启动流程（开场动画 → 向导 → 启动器）
+
+三段是**同一个 `AppWindow`**，靠 `StartupFlow.stage` 切换（`App/RootView.swift` 按 stage 分发）。
+唯一变化的是窗口尺寸，由 `AppWindow.applyStartupStage(_:animated:)` 负责：
+
+| 阶段 | 窗口 | 说明 |
+|---|---|---|
+| `.onboarding` | 370×450，不可缩放、隐藏三色按钮 | 移植自 XcodeNewBegining 的开场动画（`Views/Startup/StartupOnboardingView.swift`），主色取 `Theme` 的当前主题 |
+| `.wizard` | 1000×550 起，放开缩放 | 设置向导（`Views/Startup/SetupWizardView.swift`）：欢迎 → 账号 → Java → 主题 → 完成，「跳过」只跳当前步 |
+| `.launcher` | 同上 | `ContentView`，即原来的启动器主体 |
+
+几条约定：
+
+- 首启判定用 **`LauncherConfig.hasCompletedOnboarding`**（向导点「完成」时置 true），不要复用 `hasEnteredLauncher`：
+  后者仍由旧的欢迎弹窗维护，两者语义不同（旧配置缺这个键会解码为 `false`，于是升级后首启会再播一次，属预期）。
+- 窗口尺寸切换必须走 `StartupFlow`，不要在视图里直接改 `NSWindow`：动画阶段窗口是受尺寸锁的，
+  视图侧改尺寸会被 `minSize == maxSize` 顶回去。
+- 更新检查（`UpdateService.runInteractiveUpdateFlow`）依赖 `ContentView` 里的弹窗层，只在进入 `.launcher` 后发起；
+  欢迎弹窗同理，只在 `.launcher` 阶段显示。
+- demo 分支的 ⌘R 会重播整段开场（`StartupFlow.restartOnboarding()`），合回 main 前连同 `DemoState` 一起删。
+- 开场动画里不能再用 13+ 才有的 API（`AnyLayout`、`.bouncy`、`.rect`）：App 的最低部署目标是 12.0，
+  动画改成了 `.interpolatingSpring` + 手写分支布局。
+- 品牌标识分两处，**不要互相挪用**：开场动画用 `iconAppIcon`（App 图标本体）；启动器标题栏用
+  `iconTitleLogo` 的白色「PCL」字标（配右侧 `Swift` 标签读作 PCL.Swift）。
+- 窗口外壳全由 `AppWindow` 管：三色按钮只保留关闭与最小化；缩放按钮在 `windowDidUpdate` 里持续隐藏
+  （AppKit 会在尺寸动画 / 成为主窗口时把它写回来）。
+- 三色按钮的位置由 `alignWindowButtons()` 统一修正：透明标题栏下 AppKit 按标准 28pt 摆放，而本 App 的
+  标题栏是 48pt，需要整体下移居中。**每次窗口布局后都要重做**——`windowDidUpdate` 之外，
+  `windowDidResize` / `windowDidEndLiveResize` 也要补一次（异步、且用标记合并高频通知），
+  否则用户拖动改变窗口大小后按钮会错位。`TitleBarView.trafficLightReservedWidth` 与它配套。
+- 消息框与提示条挂在 `RootView` 而不是 `ContentView`：向导阶段要弹正版账号的设备码，那时
+  `ContentView` 还不存在。遮罩层要 `.ignoresSafeArea()`，否则顶部会缺一条（各阶段视图本身都忽略安全区）。
+- 窗口的 `contentView` 是普通 `NSView` 包着 `NSHostingView`（`sizingOptions = []`）：直接把 hosting view
+  当 contentView 时，SwiftUI 的理想尺寸会顶穿窗口（向导的 ScrollView 曾把窗口撑到 1361pt）。
+
 ## 编码约定（代码里看不出的取舍）
 
 完整版在 [CONTRIBUTING.md](CONTRIBUTING.md)，这里只列代理最容易违反的几条：

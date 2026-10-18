@@ -10,7 +10,6 @@ import UniformTypeIdentifiers
 import Core
 
 struct ContentView: View {
-    @ObservedObject private var hintManager: HintManager = .shared
     @ObservedObject private var router: AppRouter = .shared
     @ObservedObject private var easterEggManager: EasterEggManager = .shared
     @ObservedObject private var themeManager: ThemeManager = .shared
@@ -29,19 +28,8 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // 消息框与提示条已上移到 RootView（向导阶段也要能弹），这里只留页面内的浮层。
         .overlay { ExtraButtonsOverlay() }
-        .overlay { MessageBoxOverlay() }
-        .overlay {
-            VStack(alignment: .leading, spacing: 16) {
-                Spacer()
-                ForEach(hintManager.hints) { hint in
-                    HintView(model: hint)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .animation(.easeOut(duration: 0.2), value: hintManager.hints)
-            .padding(.bottom, 100)
-        }
         .background(Color.colorBackground)
         // 主题色是计算属性，切换后需要重建视图树才能整体换色；
         // demo 分支的 ⌘R 通过 replayToken 复用同一条重建路径来重播进入动画。
@@ -70,95 +58,6 @@ struct ContentView: View {
     }
 }
 
-private struct HintView: View {
-    @State private var appeared: Bool = false
-    private let model: HintModel
-    
-    init(model: HintModel) {
-        self.model = model
-    }
-    
-    var body: some View {
-        ZStack(alignment: .leading) {
-            RightRoundedRectangle(cornerRadius: 5)
-                .fill(color)
-                .frame(height: 22)
-            MyText(model.text, color: .white)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
-        }
-        .opacity(appeared ? 1 : 0)
-        .offset(x: appeared ? 0 : -50)
-        .fixedSize(horizontal: true, vertical: false)
-        .animation(.spring(duration: 0.2, bounce: 0), value: appeared)
-        .onAppear {
-            appeared = true
-        }
-    }
-    
-    private var color: Color {
-        switch model.type {
-        case .info: Color(0x0A8EFC)
-        case .finish: Color(0x1DA01D)
-        case .critical: Color(0xFF2B00)
-        }
-    }
-}
-
-private struct MessageBoxOverlay: View {
-    @ObservedObject var messageBoxManager: MessageBoxManager = .shared
-    @State private var messageBox: MessageBoxModel?
-    
-    @State private var opacity: CGFloat = 0
-    @State private var rotation: CGFloat = 4
-    @State private var offsetY: CGFloat = 40
-    
-    @State private var animationHideWorkItem: DispatchWorkItem?
-    
-    var body: some View {
-        Group {
-            if let messageBox {
-                ZStack {
-                    Rectangle()
-                        .fill(messageBox.level == .error ? Color(0xFF0000).opacity(0.5) : .black.opacity(0.35))
-                    MessageBoxView(model: messageBox)
-                        .rotationEffect(.degrees(rotation))
-                        .offset(y: offsetY)
-                }
-                .opacity(opacity)
-            }
-        }
-        .onChange(of: messageBoxManager.currentMessageBox) { newValue in
-            if newValue != nil { // 移入
-                animationHideWorkItem?.cancel()
-                messageBox = newValue
-                withAnimation(.spring(duration: 0.3, bounce: 0.3)) {
-                    offsetY = 0
-                }
-                withAnimation(.easeOut(duration: 0.3)) {
-                    opacity = 1
-                    rotation = 0
-                }
-            } else { // 移出
-                let workItem: DispatchWorkItem = .init {
-                    self.messageBox = nil
-                    self.rotation = 4
-                    self.offsetY = 40
-                }
-                animationHideWorkItem = workItem
-                let duration: CGFloat = 0.15
-                DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
-                withAnimation(.easeOut(duration: duration)) {
-                    opacity = 0
-                    offsetY = 60
-                }
-                withAnimation(.easeIn(duration: duration)) {
-                    rotation = 6
-                }
-            }
-        }
-    }
-}
 
 private struct ExtraButtonsOverlay: View {
     @ObservedObject private var router: AppRouter = .shared

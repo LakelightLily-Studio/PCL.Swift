@@ -75,6 +75,14 @@ class LauncherConfig: Codable {
     public var hasEnteredLauncher: Bool = false {
         didSet { LauncherConfig.markDirty() }
     }
+    /// 是否已完成首次启动的开场动画与设置向导。
+    ///
+    /// 与 `hasEnteredLauncher` 分开：后者记录"进过主界面"，这里记录"走完了
+    /// 开场流程"。旧配置里没有这个键时会解码为 `false`，于是升级后的第一次
+    /// 启动仍会播一遍开场动画，这正是期望的行为。
+    public var hasCompletedOnboarding: Bool = false {
+        didSet { LauncherConfig.markDirty() }
+    }
     public var multiplayerCustomPeer: String? {
         didSet { LauncherConfig.markDirty() }
     }
@@ -117,6 +125,7 @@ class LauncherConfig: Codable {
         self.hasMicrosoftAccount = try container.decodeIfPresent(Bool.self, forKey: .hasMicrosoftAccount) ?? false
         self.launchCount = try container.decodeIfPresent(Int.self, forKey: .launchCount) ?? 0
         self.hasEnteredLauncher = try container.decodeIfPresent(Bool.self, forKey: .hasEnteredLauncher) ?? false
+        self.hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
         self.multiplayerCustomPeer = try container.decodeIfPresent(String.self, forKey: .multiplayerCustomPeer)
         self.ignoreLauncherUpdates = try container.decodeIfPresent(Bool.self, forKey: .ignoreLauncherUpdates) ?? false
         self.downloadSourcePolicy = try container.decodeIfPresent(DownloadSourcePolicy.self, forKey: .downloadSourcePolicy) ?? .officialFirst
@@ -138,6 +147,7 @@ class LauncherConfig: Codable {
         try container.encode(hasMicrosoftAccount, forKey: .hasMicrosoftAccount)
         try container.encode(launchCount, forKey: .launchCount)
         try container.encode(hasEnteredLauncher, forKey: .hasEnteredLauncher)
+        try container.encode(hasCompletedOnboarding, forKey: .hasCompletedOnboarding)
         try container.encode(multiplayerCustomPeer, forKey: .multiplayerCustomPeer)
         try container.encode(ignoreLauncherUpdates, forKey: .ignoreLauncherUpdates)
         try container.encode(downloadSourcePolicy, forKey: .downloadSourcePolicy)
@@ -196,6 +206,7 @@ class LauncherConfig: Codable {
         case hasMicrosoftAccount
         case launchCount
         case hasEnteredLauncher
+        case hasCompletedOnboarding
         case multiplayerCustomPeer
         case ignoreLauncherUpdates
         case downloadSourcePolicy

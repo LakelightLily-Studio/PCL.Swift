@@ -101,6 +101,24 @@ class AccountViewModel: ObservableObject {
         }
     }
     
+    /// 添加一个离线账号（调用方已完成名称校验）。
+    ///
+    /// 设置向导需要直接给名字而不是走 `MessageBox` 输入框，所以单独开一个入口；
+    /// 写入路径与侧边栏一致，都会同步进 `LauncherConfig`。
+    @MainActor
+    public func addOfflineAccount(name: String) {
+        addAccount(OfflineAccount(name: name, uuid: UUIDUtils.uuid(ofOfflinePlayer: name)))
+    }
+
+    /// 直接发起正版账号登录，跳过"选择验证类型"的列表。
+    ///
+    /// 设置向导需要这个入口：向导里只有「添加正版账号」一个按钮，不必再弹一层选择框。
+    /// 设备码与授权结果仍走 `MessageBoxManager`，所以调用方必须保证弹窗层在场
+    /// （`RootView` 已在向导阶段挂上 `MessageBoxOverlay`）。
+    public func addMicrosoftAccount() async {
+        await requestAddMicrosoftAccount()
+    }
+
     private func requestAddMicrosoftAccount() async {
         let service: MicrosoftAuthService = .init()
         let code: MicrosoftAuthService.AuthorizationCode

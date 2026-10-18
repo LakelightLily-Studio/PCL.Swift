@@ -9,6 +9,11 @@ import SwiftUI
 import Core
 
 struct TitleBarView: View {
+    /// 三色按钮占用的宽度：窗口左侧 20pt 起始 + 两个 14pt 按钮 + 间距 + 尾部留白。
+    ///
+    /// 缩放按钮是恒隐藏的（见 `AppWindow`），所以这里只给两个按钮留位。
+    static let trafficLightReservedWidth: CGFloat = 62
+
     @ObservedObject private var router: AppRouter = .shared
     @ObservedObject private var flagsManager: FlagsManager = .shared
     
@@ -26,6 +31,8 @@ struct TitleBarView: View {
                     }
                 } else {
                     HStack {
+                        // 标题栏沿用 PCL 的白色线条字标（配合右侧的 "Swift" 标签读作 PCL.Swift）；
+                        // App 图标只用在开场动画里，不要挪到这里。
                         Image(.iconTitleLogo)
                             .resizable()
                             .scaledToFit()
@@ -50,9 +57,11 @@ struct TitleBarView: View {
                     }
                 }
             }
-            .padding(.leading, 65)
+            // 三色按钮由系统画在透明标题栏里（关闭 + 最小化，缩放按钮恒隐藏），
+            // 内容从这里起排，留出按钮组占用的宽度，避免标题 Logo 压到按钮上。
+            .padding(.leading, Self.trafficLightReservedWidth)
         }
-        .frame(height: 48)
+        .frame(height: AppWindow.titleBarHeight)
     }
 }
 

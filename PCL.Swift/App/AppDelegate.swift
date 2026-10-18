@@ -13,6 +13,8 @@ import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: AppWindow!
+    /// 开场动画 → 设置向导 → 启动器主体的阶段状态，三段共用一个窗口。
+    private var startupFlow: StartupFlow!
     private lazy var shouldInit: Bool = ProcessInfo.processInfo.environment["PCL_MAC_TESTING"] == nil && ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1"
     private var keyMonitor: Any?
     
@@ -137,9 +139,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
         
         NSApplication.shared.appearance = NSAppearance(named: .aqua)
-        self.window = AppWindow(instanceManager: instanceManager)
+        let startupFlow: StartupFlow = .init(stage: StartupFlow.initialStage())
+        self.startupFlow = startupFlow
+        self.window = AppWindow(instanceManager: instanceManager, startupFlow: startupFlow)
         self.window.makeKeyAndOrderFront(nil)
-        log("成功创建窗口")
+        log("成功创建窗口（启动阶段：\(startupFlow.stage)）")
         addEscapeMonitor()
         
         if let loadError = LauncherConfig.loadError {
@@ -150,7 +154,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
         
-        if !LauncherConfig.shared.hasEnteredLauncher {
+        // 欢迎弹窗只属于启动器主体的首次进入；开场动画与向导阶段还没有可挂弹窗的界面。
+        if !LauncherConfig.shared.hasEnteredLauncher && startupFlow.stage == .launcher {
             MessageBoxManager.shared.showText(
                 title: "欢迎使用 PCL.Swift！",
                 content: "PCL.Swift 是 Plain Craft Launcher 的非官方衍生版，使用 SwiftUI 框架完全重构了 PCL 以支持 macOS。\n本启动器还处于开发阶段，有许多功能尚未完成，Bug 可能也比较多……\n若要获取帮助或查看更多信息，请访问项目的 GitHub 仓库！\n\n在开始使用前，请先阅读 Cylorine Studio 隐私政策。",
@@ -166,7 +171,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 LauncherConfig.shared.hasEnteredLauncher = true
             }
         }
-        UpdateService.shared.runInteractiveUpdateFlow()
+        // 引导流程（开场动画 → 向导）走完时由 StartupFlow 自己发起更新检查。
+        if startupFlow.stage == .launcher {
+            UpdateService.shared.runInteractiveUpdateFlow()
+        }
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -196,19 +204,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 return nil
             }
-            return Self.handleDemoShortcut(event) ? nil : event
+            return self.handleDemoShortcut(event) ? nil : event
         }
     }
     
-    /// demo 分支专用：⌘R 重播进入动画，1–4 切换顶栏页面。
+    /// demo 分支专用：⌘R 重播进入动画与整段开场流程，1–4 切换顶栏页面。
     /// 弹窗打开时不拦截，避免抢掉对话框自己的键盘焦点。
-    private static func handleDemoShortcut(_ event: NSEvent) -> Bool {
+    /// 需要读 `startupFlow`，因此从静态方法改成实例方法。
+    private func handleDemoShortcut(_ event: NSEvent) -> Bool {
         guard MessageBoxManager.shared.currentMessageBox == nil else { return false }
         
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if flags == .command, event.charactersIgnoringModifiers?.lowercased() == "r" {
             DispatchQueue.main.async {
                 DemoState.shared.replayEntryAnimation()
+                // 顺便重播整段开场：窗口缩回动画画布，再走一遍动画 → 向导 → 主体。
+                self.startupFlow?.restartOnboarding()
             }
             return true
         }
