@@ -14,6 +14,7 @@
 
 import Foundation
 import AppKit
+import Combine
 import Core
 
 /// 本机安装的 DSH。
@@ -103,14 +104,29 @@ enum DSHRuntime {
 }
 
 /// DSH 进程管理。整个 App 共用一个实例，`AppDelegate` 退出时调用 `terminateAll`。
+///
+/// 启动流程做成 `MyTask`，与 Minecraft 共用同一套进度界面（阶段名 + 百分比 +
+/// 取消按钮）；进程起来后 `isRunning` 为真，右下角会出现停止按钮。
 @MainActor
 final class DSHLaunchManager: ObservableObject {
     public static let shared: DSHLaunchManager = .init()
 
     @Published public private(set) var isRunning: Bool = false
     @Published public private(set) var isLaunching: Bool = false
+    @Published public private(set) var progress: Double = 0
+    @Published public private(set) var currentStage: String?
+    @Published public private(set) var instanceName: String?
     /// 启动成功后展示给用户的地址。
     @Published public private(set) var webURL: URL?
+    public let loadingViewModel: MyLoadingViewModel = .init(text: "正在启动 DSH")
+
+    private var task: MyTask<DSHLaunchModel>? {
+        didSet {
+            isLaunching = task != nil
+            subscribeToTask()
+        }
+    }
+    private var cancellables: Set<AnyCancellable> = []
 
     /// 由本启动器起的 `dsh web` 子进程。
     private var process: Process?
@@ -122,17 +138,78 @@ final class DSHLaunchManager: ObservableObject {
     private init() {}
 
     /// 启动 DSH。
+    ///
+    /// 三个阶段与 Minecraft 的启动流程对齐：检查安装 → 拉起进程 → 等 WebUI 就绪。
+    /// 界面复用 `launchingBody`，因此同样有阶段名、进度与取消按钮。
     @MainActor
     public func launch(_ instance: DSHInstance) {
-        guard !isLaunching else { return }
-        isLaunching = true
+        guard !isLaunching, !isRunning else { return }
+        loadingViewModel.text = "正在启动 DSH"
+        instanceName = instance.version
 
-        switch instance.form {
-        case .commandLine(let executable, let profile):
-            launchWebUI(executable: executable, profile: profile)
-        case .application(let bundleURL):
-            launchApplication(at: bundleURL)
+        let model = DSHLaunchModel(instance: instance, manager: self)
+        let task: MyTask<DSHLaunchModel> = .init(
+            name: "启动 DSH",
+            model: model,
+            .init(0, "检查安装形态") { subtask, model in
+                await subtask.setProgressAsync(1)
+                switch model.instance.form {
+                case .commandLine(let executable, _):
+                    guard FileManager.default.isExecutableFile(atPath: executable.path) else {
+                        throw SimpleError("找不到 dsh 可执行文件：\(executable.path)")
+                    }
+                case .application(let bundleURL):
+                    guard FileManager.default.fileExists(atPath: bundleURL.path) else {
+                        throw SimpleError("找不到 DeepSeek Harness.app：\(bundleURL.path)")
+                    }
+                }
+            },
+            .init(1, "启动 DSH 进程") { subtask, model in
+                await subtask.setProgressAsync(0.4)
+                guard let manager = model.manager else {
+                    throw SimpleError("启动管理器已失效。")
+                }
+                try await manager.startProcess(for: model.instance)
+                await subtask.setProgressAsync(1)
+            },
+            .init(2, "等待 WebUI 就绪") { subtask, _ in
+                // `dsh web` 起进程后要加载依赖，这里给一个可见的等待窗口。
+                for step in 1...10 {
+                    try await Task.sleep(seconds: 0.15)
+                    await subtask.setProgressAsync(Double(step) / 10)
+                }
+            }
+        )
+
+        TaskManager.shared.execute(task: task, display: false) { [weak self] error in
+            guard let self else { return }
+            self.task = nil
+            self.currentStage = nil
+            self.instanceName = nil
+            self.progress = 0
+            if let error, !error.isCancellationError {
+                self.isLaunching = false
+                hint("启动 DSH 失败：\(error.localizedDescription)", type: .critical)
+            }
         }
+
+        self.task = task
+    }
+
+    /// 取消正在进行的启动任务。
+    @MainActor
+    public func cancel() {
+        if let task {
+            TaskManager.shared.cancel(task.id)
+        }
+        isLaunching = false
+    }
+
+    /// 结束由本启动器起的 DSH（用户点右下角停止按钮时调用）。
+    @MainActor
+    public func stop() {
+        terminateAll()
+        hint("已关闭 DSH", type: .finish)
     }
 
     /// 结束由本启动器起的 DSH。
@@ -162,10 +239,46 @@ final class DSHLaunchManager: ObservableObject {
         webURL = nil
     }
 
-    // MARK: - 两种启动方式
+    // MARK: - 进度订阅
+
+    private func subscribeToTask() {
+        cancellables.removeAll()
+        guard let task else { return }
+        task.$progress
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in self?.progress = value }
+            .store(in: &cancellables)
+        task.$currentTaskOrdinal
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] ordinal in
+                guard let self, let ordinal else { return }
+                self.currentStage = ordinal < self.stageNames.count
+                    ? self.stageNames[ordinal]
+                    : nil
+                if self.loadingViewModel.text == "正在启动 DSH" {
+                    self.loadingViewModel.text = "正在启动 DSH"
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private let stageNames = ["检查安装形态", "启动 DSH 进程", "等待 WebUI 就绪"]
+
+    // MARK: - 实际启动
+
+    /// 由启动任务调用：按安装形态拉起进程。
+    @MainActor
+    func startProcess(for instance: DSHInstance) async throws {
+        switch instance.form {
+        case .commandLine(let executable, let profile):
+            try launchWebUI(executable: executable, profile: profile)
+        case .application(let bundleURL):
+            try await launchApplication(at: bundleURL)
+        }
+    }
 
     @MainActor
-    private func launchWebUI(executable: URL, profile: String) {
+    private func launchWebUI(executable: URL, profile: String) throws {
         let process = Process()
         process.executableURL = executable
         process.arguments = ["--profile", profile]
@@ -183,14 +296,7 @@ final class DSHLaunchManager: ObservableObject {
             }
         }
 
-        do {
-            try process.run()
-        } catch {
-            err("启动 DSH 失败：\(error.localizedDescription)")
-            hint("启动 DSH 失败：\(error.localizedDescription)", type: .critical)
-            isLaunching = false
-            return
-        }
+        try process.run()
 
         self.process = process
         self.outputPipe = pipe
@@ -237,26 +343,30 @@ final class DSHLaunchManager: ObservableObject {
     }
 
     @MainActor
-    private func launchApplication(at bundleURL: URL) {
+    private func launchApplication(at bundleURL: URL) async throws {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         let bundleId = Bundle(url: bundleURL)?.bundleIdentifier
 
-        NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration) { [weak self] application, error in
-            Task { @MainActor in
-                guard let self else { return }
-                if let error {
-                    err("启动 DSH 失败：\(error.localizedDescription)")
-                    hint("启动 DSH 失败：\(error.localizedDescription)", type: .critical)
-                    self.isLaunching = false
-                    return
-                }
-                self.isLaunching = false
-                self.isRunning = true
-                self.launchedApplicationBundleId = application?.bundleIdentifier ?? bundleId
-                log("已启动 DSH 桌面端（bundle id：\(self.launchedApplicationBundleId ?? "未知")）")
-                hint("DSH 已打开", type: .finish)
-            }
-        }
+        let application = try await NSWorkspace.shared.openApplication(
+            at: bundleURL,
+            configuration: configuration
+        )
+        isRunning = true
+        launchedApplicationBundleId = application.bundleIdentifier ?? bundleId
+        log("已启动 DSH 桌面端（bundle id：\(launchedApplicationBundleId ?? "未知")）")
+        hint("DSH 已打开", type: .finish)
     }
 }
+
+/// DSH 启动任务的模型。持有 manager 引用，便于子任务直接驱动进程。
+final class DSHLaunchModel: TaskModel {
+    let instance: DSHInstance
+    weak var manager: DSHLaunchManager?
+
+    init(instance: DSHInstance, manager: DSHLaunchManager) {
+        self.instance = instance
+        self.manager = manager
+    }
+}
+
