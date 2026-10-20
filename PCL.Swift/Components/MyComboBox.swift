@@ -14,12 +14,24 @@ struct MyComboBox: View {
     @State private var checkedScale: CGFloat = 0.0
     @State private var canClick: Bool = true
     private let text: String
-    
+    /// 是否允许通过点击取消勾选。
+    ///
+    /// 用于「单选组」：语义上已选中项再点一次不应该变成一个都没选。
+    /// 关掉后点击已勾选项不会有任何视觉反馈，动画也不会播放一半再弹回来。
+    private let allowsUncheck: Bool
+
     private let scaleAnimation: Animation = .spring(response: 0.3, dampingFraction: 0.5)
-    
-    init(checked: Binding<Bool>, text: String) {
+
+    /// - Parameters:
+    ///   - checked: 勾选状态。
+    ///   - text: 显示文案。
+    ///   - allowsUncheck: 是否允许点击取消勾选，默认允许。
+    ///     单选组应传 false：否则点了已选项会先播取消动画，再被绑定的 set 拦下，
+    ///     视觉上「闪一下取消」，直到视图重建才恢复。
+    init(checked: Binding<Bool>, text: String, allowsUncheck: Bool = true) {
         self._checked = checked
         self.text = text
+        self.allowsUncheck = allowsUncheck
     }
     
     var body: some View {
@@ -59,6 +71,19 @@ struct MyComboBox: View {
                     }
                     
                     let checked = checked
+                    // 单选组：已勾选的项再点一次不应该变成「一个都没选」，
+                    // 所以这里直接不写回绑定，只把按压缩放弹回去。
+                    if checked && !allowsUncheck {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation(scaleAnimation) {
+                                scale = 1
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                canClick = true
+                            }
+                        }
+                        return
+                    }
                     self.checked.toggle()
                     
                     if checked {

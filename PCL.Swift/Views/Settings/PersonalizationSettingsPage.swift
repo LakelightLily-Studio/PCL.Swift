@@ -24,7 +24,8 @@ struct PersonalizationSettingsPage: View {
             MyCard("主页", foldable: false) {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(LauncherConfig.HomepageType.allCases, id: \.self) { type in
-                        MyComboBox(checked: homepageBinding(type), text: type.description)
+                        // 二选一：已选中项再点不取消，否则会出现「一个都没选」的状态。
+                        MyComboBox(checked: homepageBinding(type), text: type.description, allowsUncheck: false)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
