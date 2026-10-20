@@ -79,7 +79,7 @@ struct GameSettingsPage: View {
                         let item = viewModel.javaList[idx]
                         MyListItem { hovered in
                             HStack {
-                                VStack(alignment: .leading) {
+                                VStack(alignment: .leading, spacing: 2) {
                                     MyText(item.name)
                                         .lineLimit(1)
                                     MyText(item.url.path, color: .colorGray3)

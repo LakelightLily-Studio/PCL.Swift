@@ -123,7 +123,7 @@ struct AboutPage: View {
                     .frame(width: 32, height: 32)
                     .clipShape(.circle)
                     .contrast(easterEggManager.modifyColor ? -1 : 1) // 防止“千万别点”颜色反转影响到头像
-                    VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 2) {
                         MyText(nickname)
                         MyText(description, color: .colorGray3)
                     }

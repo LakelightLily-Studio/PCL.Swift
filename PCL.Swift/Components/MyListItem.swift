@@ -30,14 +30,19 @@ struct MyListItem<Content: View>: View {
                             .frame(width: 4, height: 24)
                             .offset(x: -4)
                     }
-                    HStack {
+                    // 显式 center：默认也是 center，但这里写出来是为了说明意图——
+                    // 图标与右侧文字块按几何中心对齐，单行与双行文字的条目视觉高度才一致。
+                    HStack(alignment: .center, spacing: 0) {
                         if let image = model.image {
                             image.makeView()
                             .scaledToFit()
                             .frame(width: model.imageSize, height: model.imageSize)
                             .foregroundStyle(Color.color1)
+                            .padding(.trailing, 6)
                         }
-                        VStack(alignment: .leading) {
+                        // 主标题与灰色副标题之间留 2pt：默认 0 行距会让两行贴在一起，
+                        // 字号不同时尤其显得挤，与右侧留白不成比例。
+                        VStack(alignment: .leading, spacing: 2) {
                             MyText(model.name)
                                 .lineLimit(1)
                             if let description = model.description {

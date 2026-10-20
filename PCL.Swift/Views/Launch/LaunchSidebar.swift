@@ -271,7 +271,7 @@ struct LaunchSidebar: Sidebar {
                                 .frame(width: 12)
                         }
                         PlayerAvatar(account, length: 36)
-                        VStack(alignment: .leading) {
+                        VStack(alignment: .leading, spacing: 2) {
                             MyText(account.profile.name)
                             MyText(account.localizedTypeName, color: .colorGray3)
                         }
