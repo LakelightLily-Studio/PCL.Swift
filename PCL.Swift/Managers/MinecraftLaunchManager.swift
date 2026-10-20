@@ -43,7 +43,8 @@ class MinecraftLaunchManager: ObservableObject {
     ) {
         if isLaunching { return }
         self.loadingViewModel.text = "正在启动游戏"
-        let task: MyTask<MinecraftLaunchTask.Model> = MinecraftLaunchTask.create(for: instance, using: account, in: repository) { launcher, process in
+        let task: MyTask<MinecraftLaunchTask.Model> = MinecraftLaunchTask.create(for: instance, using: account, in: repository) { [weak self] launcher, process in
+            guard let self else { return }
             self.gameProcess = process
             process.terminationHandler = { [weak self] process in
                 log("游戏进程已退出，退出代码：\(process.terminationStatus)")

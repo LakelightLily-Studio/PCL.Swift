@@ -39,8 +39,9 @@ class MultiplayerViewModel: ObservableObject {
             }
             state = .creatingRoom
             let code: String = RoomCode.generate()
-            Task.detached {
+            Task.detached { [weak self] in
                 do {
+                    guard let self else { return }
                     let peers = await self.peers()
                     let server: ScaffoldingServer = .init(
                         easyTier: EasyTierManager.shared.makeEasyTier(peers: peers),
@@ -78,10 +79,7 @@ class MultiplayerViewModel: ObservableObject {
                     log("启动联机中心成功，房间码：\(server.roomCode)")
                 } catch {
                     err("启动联机中心失败：\(error.localizedDescription)")
-                    self.showError(title: "启动联机中心失败", body: error.localizedDescription)
-                    await MainActor.run {
-                        self.stopHost()
-                    }
+                    await self?.handleHostFailure(error)
                 }
             }
         } catch {
@@ -110,8 +108,9 @@ class MultiplayerViewModel: ObservableObject {
     @MainActor
     public func join(roomCode: String) {
         state = .joiningRoom
-        Task.detached {
+        Task.detached { [weak self] in
             do {
+                guard let self else { return }
                 let peers = await self.peers()
                 let client: ScaffoldingClient = .init(
                     easyTier: EasyTierManager.shared.makeEasyTier(peers: peers),
@@ -140,12 +139,27 @@ class MultiplayerViewModel: ObservableObject {
                 }
             } catch {
                 err("加入房间失败：\(error.localizedDescription)")
-                self.showError(title: "加入房间失败", body: error.localizedDescription)
-                await self.leave()
+                await self?.handleJoinFailure(error)
             }
         }
     }
     
+    // MARK: - 失败收尾
+
+    /// 创建房间失败：报错并复位状态。
+    @MainActor
+    private func handleHostFailure(_ error: Swift.Error) {
+        showError(title: "启动联机中心失败", body: error.localizedDescription)
+        stopHost()
+    }
+
+    /// 加入房间失败：报错并断开客户端。
+    @MainActor
+    private func handleJoinFailure(_ error: Swift.Error) async {
+        showError(title: "加入房间失败", body: error.localizedDescription)
+        leave()
+    }
+
     /// 退出房间。
     @MainActor
     public func leave() {

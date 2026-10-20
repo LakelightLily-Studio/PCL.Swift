@@ -308,6 +308,10 @@ final class DSHLaunchManager: ObservableObject {
     }
 
     /// 解析 `dsh web` 打印的地址。
+    ///
+    /// 读管道是阻塞的，所以放在 `Task.detached` 里轮询；状态写入统一回到
+    /// `webUIStateDidChange(_:)`，避免在并发闭包里直接访问 `self` 的 `weak` 绑定
+    /// （Swift 6 语言模式下那是编译错误）。
     private func watchForListeningAddress(pipe: Pipe) {
         Task.detached { [weak self] in
             let handle = pipe.fileHandleForReading
@@ -318,19 +322,25 @@ final class DSHLaunchManager: ObservableObject {
                 buffer.append(chunk)
                 guard let text = String(data: buffer, encoding: .utf8) else { continue }
                 if let url = Self.parseURL(from: text) {
-                    await MainActor.run {
-                        self?.webURL = url
-                        self?.isLaunching = false
-                        hint("WebUI 已打开：\(url.absoluteString)", type: .finish)
-                    }
+                    await self?.webUIStateDidChange(url)
                     return
                 }
                 try? await Task.sleep(nanoseconds: 150_000_000)
             }
-            await MainActor.run {
-                self?.isLaunching = false
-                hint("WebUI 已打开", type: .finish)
-            }
+            await self?.webUIStateDidChange(nil)
+        }
+    }
+
+    /// `watchForListeningAddress` 的落点：找到地址与超时兜底共用这里。
+    /// - Parameter url: 解析出的地址；为 `nil` 表示没读到，按默认情形收尾。
+    @MainActor
+    private func webUIStateDidChange(_ url: URL?) {
+        isLaunching = false
+        if let url {
+            webURL = url
+            hint("WebUI 已打开：\(url.absoluteString)", type: .finish)
+        } else {
+            hint("WebUI 已打开", type: .finish)
         }
     }
 
