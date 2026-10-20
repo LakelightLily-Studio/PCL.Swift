@@ -31,9 +31,8 @@ jobs:
         run: |
           set +e
 
-          xcodebuild test \
-            -project PCL.Swift.xcodeproj -scheme PCL.Swift \
-            -resultBundlePath ./result.xcresult
+          # 统一走项目脚本：装了 Swift 6.4 就用它，否则回退 Xcode 自带工具链。
+          Scripts/xcodebuild-swift.sh test Debug "" -resultBundlePath ./result.xcresult
           
           exit_code=$?
           echo "TEST_EXIT_CODE=$exit_code" >> "$GITHUB_ENV"
@@ -66,9 +65,7 @@ jobs:
         run: |
           set +e
 
-          xcodebuild test \
-            -project PCL.Swift.xcodeproj -scheme PCL.Swift \
-            -resultBundlePath ./result.xcresult
+          Scripts/xcodebuild-swift.sh test Debug "" -resultBundlePath ./result.xcresult
           
           exit_code=$?
           echo "TEST_EXIT_CODE=$exit_code" >> "$GITHUB_ENV"

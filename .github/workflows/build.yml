@@ -63,12 +63,30 @@ jobs:
       - name: Build app
         run: |
           echo "Build number: $BUILD_NUMBER"
+
+          # 与本地保持一致：装了 Swift 6.4 就用它，否则回退 Xcode 自带工具链
+          # （源码用了 6.1+ 的语法，Xcode 自带的 6.0 编不过）。
+          SWIFTC=""
+          if [ -x /Library/Developer/Toolchains/swift-latest.xctoolchain/usr/bin/swiftc ]; then
+            SWIFTC=/Library/Developer/Toolchains/swift-latest.xctoolchain/usr/bin/swiftc
+          elif [ -x /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc ]; then
+            SWIFTC=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc
+          fi
+
+          TOOLCHAIN_ARGS=()
+          if [ -n "$SWIFTC" ]; then
+            echo "swiftc: $SWIFTC"
+            "$SWIFTC" --version | head -1
+            TOOLCHAIN_ARGS=(SWIFT_EXEC="$SWIFTC")
+          fi
+
           COMMON_ARGS=(
             -project PCL.Swift.xcodeproj
             -scheme PCL.Swift
             -configuration "${{ inputs.build_configuration }}"
             CURRENT_PROJECT_VERSION=$BUILD_NUMBER
             -archivePath build
+            "${TOOLCHAIN_ARGS[@]+"${TOOLCHAIN_ARGS[@]}"}"
           )
 
           if [ "${{ inputs.build_configuration }}" = "Release" ]; then

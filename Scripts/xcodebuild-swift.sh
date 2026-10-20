@@ -18,7 +18,11 @@
 # 用法：
 #   Scripts/xcodebuild-swift.sh build  [Debug|Release]
 #   Scripts/xcodebuild-swift.sh test
+#   Scripts/xcodebuild-swift.sh clean
 #   Scripts/xcodebuild-swift.sh build Debug /path/to/other.xctoolchain/usr/bin/swiftc
+#   Scripts/xcodebuild-swift.sh test Debug "" -resultBundlePath ./result.xcresult
+#
+# 第 4 个及之后的参数会原样透传给 xcodebuild。
 #
 set -euo pipefail
 
@@ -27,6 +31,13 @@ cd "$(dirname "$0")/.."
 ACTION="${1:-build}"
 CONFIGURATION="${2:-Debug}"
 SWIFTC="${3:-}"
+# 其余参数原样透传给 xcodebuild，例如 -resultBundlePath ./result.xcresult。
+if [ "$#" -gt 3 ]; then
+    shift 3
+else
+    shift "$#"
+fi
+EXTRA_ARGS=("$@")
 
 if [ -z "$SWIFTC" ]; then
     # 优先用 swift-latest 软链指向的工具链，其次退回 Xcode 默认。
@@ -47,17 +58,27 @@ case "$ACTION" in
             -scheme PCL.Swift \
             -configuration "$CONFIGURATION" \
             -destination 'platform=macOS' \
-            SWIFT_EXEC="$SWIFTC"
+            SWIFT_EXEC="$SWIFTC" \
+            "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"
         ;;
     test)
         exec xcodebuild test \
             -project PCL.Swift.xcodeproj \
             -scheme PCL.Swift \
             -destination 'platform=macOS' \
-            SWIFT_EXEC="$SWIFTC"
+            SWIFT_EXEC="$SWIFTC" \
+            "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"
+        ;;
+    clean)
+        # 只清 DerivedData 里的构建产物。注意：警告来自某一次具体编译，清完要
+        # 重新 touch 源码才会重现，否则 xcodebuild 直接复用缓存、什么都不报。
+        exec xcodebuild clean \
+            -project PCL.Swift.xcodeproj \
+            -scheme PCL.Swift \
+            -configuration "$CONFIGURATION"
         ;;
     *)
-        echo "用法: $0 {build|test} [Debug|Release] [swiftc 路径]" >&2
+        echo "用法: $0 {build|test|clean} [Debug|Release] [swiftc 路径]" >&2
         exit 64
         ;;
 esac

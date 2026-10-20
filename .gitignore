@@ -8,3 +8,10 @@ PCL.Swift.xcodeproj/xcuserdata/
 PCL.Swift.xcodeproj/project.xcworkspace/xcuserdata/
 
 build.xcarchive
+
+# 草稿与备份文件
+# 工程用 FileSystemSynchronizedRootGroup 管理源码，目录里的任何文件都会自动入 Target；
+# .bak 一类后缀不参与编译，但会被当成资源原样打包进 App 的 Resources，所以别留在源码树里。
+*.bak
+*.orig
+*.swift.save

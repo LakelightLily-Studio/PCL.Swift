@@ -31,6 +31,10 @@ PCL.Swift；只有 **Swift 模块名仍是 `Core`**（`import Core`），改它�
 Scripts/xcodebuild-swift.sh build Debug
 Scripts/xcodebuild-swift.sh build Release
 Scripts/xcodebuild-swift.sh test
+Scripts/xcodebuild-swift.sh clean          # 只清构建产物
+
+# 第 4 个及之后的参数原样透传给 xcodebuild
+Scripts/xcodebuild-swift.sh test Debug "" -resultBundlePath ./result.xcresult
 
 # 等价的原始命令（Swift 6.4 工具链）
 xcodebuild build -project PCL.Swift.xcodeproj -scheme PCL.Swift -configuration Debug \
@@ -58,6 +62,31 @@ Swift 6.0 会直接报 `unexpected ',' separator`；此外 `MinecraftRepository`
 | **`SWIFT_EXEC=<6.4 的 swiftc>`** | ✅ 唯一可靠；保留 Xcode 的 SDK/clang，SPM 正常 |
 
 Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径，与命令行不同。
+
+### 警告基线：哪些该修，哪些是噪音
+
+用 6.4 工具链构建时会比 Xcode 自带的 6.2.1 多出一批并发诊断（实测同一份代码 6.2.1 报 0 条、6.4 报 14 条）。
+**这些不是 6.4 的 bug，是它在 Swift 5 语言模式下提前预演 Swift 6 的错误**，该修的要修，不该动的别动：
+
+| 诊断 | 处理 |
+|---|---|
+| `ld: warning: building for macOS-12.0, but linking with dylib ... built for newer version 13.0` | **无视**。这是 6.4 工具链自带的运行时库本身标了 `minos 13.0`，与项目代码无关：空文件 `print(1)` 同样会报，换 Xcode 自带 swiftc 就不报。消除它只能把部署目标抬到 13.0，等于放弃 macOS 12 支持 |
+| `reference to captured var 'self' in concurrently-executing code` | **修**。`[weak self]` 捕获出的是可变 optional，在 `@Sendable` 闭包里读它就是 Swift 6 的硬错误。把状态写入收进 `@MainActor` 方法，用 `await self?.方法()` |
+| `'weak' ownership of capture 'self' differs from implicitly-captured strong reference` | **修**。外层闭包已隐式强捕获 `self`，内层再 `[weak self]` 是自相矛盾的写法。统一成外层 `[weak self] + guard let self` |
+| `unstructured throwing task ... is not used` | **修**，这是真有 bug：`Task { try f() }` 的错误没人接会被静默丢弃。`_ = Task { ... }` 或 `try?` 只是把警告藏起来，正确做法是让被调函数返回 `Bool` 供 `guard` 判断，或在 Task 内显式 `do/catch` 并记日志 |
+| `conformance of 'Model' to protocol 'TaskModel' may be isolated ...` | **暂不修**。`Model` 没有 `Sendable` 约束，而 `MyTask` 的子任务要并发跑。加 `Sendable` 得给所有 Model 挂 `@unchecked Sendable`（等于关掉检查），标 `@MainActor` 则废掉并发——两者都比留着警告更糟，等迁 Swift 6 时连同 `MyTask` 的并发模型一起重构 |
+
+另外 `appintentsmetadataprocessor` 的 `Metadata extraction skipped` 也是噪音，项目没用 AppIntents。
+
+**清缓存不会让警告重现**：警告只在真正重新编译某文件时出现，`xcodebuild` 命中缓存就什么都不报。要复核诊断得先
+`find PCL.Swift PCL.Swift.Core -name '*.swift' -exec touch {} +` 再构建。
+
+### 源码目录里不要留草稿文件
+
+工程用 **FileSystemSynchronizedRootGroup**，目录里的任何文件都会自动入 Target。`.bak` / `.orig` 一类后缀不参与
+编译，但**会被当成资源原样拷进 App 的 `Contents/Resources`**（实测过）。所以 `.gitignore` 里挡掉了它们；
+删掉源码树里的这类文件后若构建仍报 `lstat(...): No such file or directory`，那是 DerivedData 里的陈旧快照，
+清一次构建缓存即可，不是源码问题。
 
 测试相关的事实：
 

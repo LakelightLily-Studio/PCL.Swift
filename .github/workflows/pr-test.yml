@@ -28,12 +28,10 @@ jobs:
           fetch-depth: 0
 
       - name: Run tests
+        # 统一走 Scripts/xcodebuild-swift.sh：它会挑可用工具链（装了 Swift 6.4 就用，
+        # 没有就退回 Xcode 自带）。runner 上通常没有 6.4，这里同样能跑通。
         run: |
-          xcodebuild test \
-            -project PCL.Swift.xcodeproj \
-            -scheme PCL.Swift \
-            -destination 'platform=macOS' \
-            -resultBundlePath ./result.xcresult
+          Scripts/xcodebuild-swift.sh test
 
       - name: Upload result
         if: always()
