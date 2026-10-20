@@ -22,6 +22,9 @@ struct StartupOnboardingView: View {
     /// 动画状态机：每个标记/数值对应一个视觉阶段。
     @State private var properties: Properties = .init()
     @State private var windowCornerRadius: CGFloat = 12
+    /// 图标在面板坐标系里的最终位置。收尾的径向淡出要以它为中心，
+    /// 而图标并不在面板正中（下方还有文案与按钮），所以不能直接写 .center。
+    @State private var logoFrame: CGRect = .zero
 
     private var tint: Color { .color3 }
     private var tintShade: Color { .color4 }
@@ -34,14 +37,23 @@ struct StartupOnboardingView: View {
             let logoSide: CGFloat = max(120, min(220, compactSide * 0.5))
 
             ZStack {
-                background
+                background(logoSide: logoSide)
                 foreground(logoSide: logoSide)
             }
             .frame(width: panelWidth, height: panelHeight, alignment: .center)
+            .coordinateSpace(name: Self.panelSpace)
             .background(Color(nsColor: .windowBackgroundColor))
             .background(WindowCornerRadiusReader(cornerRadius: $windowCornerRadius))
             .clipShape(RoundedRectangle(cornerRadius: windowCornerRadius))
             .overlay(alignment: .topLeading) { closeButton }
+            .onPreferenceChange(LogoFramePreferenceKey.self) { frame in
+                // 只认收拢结束后的稳定值：弹簧动画过程中每帧都会上报不同的尺寸，
+                // 逐帧写 @State 会让整棵视图反复重排。等宽度落到 logoSide 才记一次。
+                guard properties.convertToLogo, frame.width >= logoSide - 1 else { return }
+                if abs(logoFrame.midX - frame.midX) > 0.5 || abs(logoFrame.midY - frame.midY) > 0.5 {
+                    logoFrame = frame
+                }
+            }
         }
         // 开场动画要铺满整扇窗口：标题栏透明且内容延伸到标题栏下方，
         // 否则顶部会留一条 28pt 的系统底色，与主题色断层。
@@ -55,8 +67,21 @@ struct StartupOnboardingView: View {
 
     // MARK: - 背景层
 
-    private var background: some View {
+    private func background(logoSide: CGFloat) -> some View {
         GeometryReader { proxy in
+            let compactSide: CGFloat = min(proxy.size.width, proxy.size.height)
+            // 放射渐变的中心用单位坐标（0...1），换算自图标在面板里的落点。
+            let center: UnitPoint = logoFrame == .zero
+                ? .center
+                : UnitPoint(
+                    x: logoFrame.midX / proxy.size.width,
+                    y: logoFrame.midY / proxy.size.height
+                )
+            // 淡出半径要够大，让线条从面板四周向图标平缓过渡，而不是围着图标一圈硬边。
+            let fadeRadius: CGFloat = max(logoSide * 1.2, compactSide * 0.55)
+            // 遮罩强度：收尾阶段从 0 插值到 1，线条才「逐渐」变淡而不是瞬间消失。
+            let fadeIntensity: Double = properties.fadeBackgroundLines ? 1 : 0
+
             ZStack {
                 // 第 1 阶段主色铺底：主圆扩散，建立整体主题色氛围。
                 Circle()
@@ -69,15 +94,20 @@ struct StartupOnboardingView: View {
                     )
                     .scaleEffect(properties.animateMainCircle ? 2 : 0)
 
-                gridLines()
+                // 网格与对角线合为一层再统一加遮罩：它们共用同一个「草稿风格线条」语义，
+                // 分两层各自遮罩会在视觉上出现轻微不一致的过渡边界。
+                // 轨道圆环（circlesView / circleStrokeView）保持原样，收尾时仍自行收拢淡出。
+                ZStack {
+                    gridLines()
+                    diagonalLines()
+                }
+                .modifier(RadialFadeOut(intensity: fadeIntensity, center: center, fadeRadius: fadeRadius))
+
                 circlesView()
                 circleStrokeView()
-                diagonalLines()
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .opacity(properties.convertToLogo ? 0.85 : 1)
-        .animation(.easeInOut(duration: 0.5), value: properties.convertToLogo)
         .allowsHitTesting(false)
         .ignoresSafeArea()
     }
@@ -96,6 +126,17 @@ struct StartupOnboardingView: View {
                     .frame(
                         width: properties.convertToLogo ? logoSide : panelWidth,
                         height: properties.convertToLogo ? logoSide : panelHeight
+                    )
+                    // 上报图标在面板里的最终落点，供背景线条做径向淡出。
+                    // 必须挂在 .frame 之后：挂在 logoView 内部量到的是图片自身尺寸，
+                    // 不是收拢后的画布尺寸。
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: LogoFramePreferenceKey.self,
+                                value: proxy.frame(in: .named(Self.panelSpace))
+                            )
+                        }
                     )
 
                 contentView
@@ -158,6 +199,46 @@ struct StartupOnboardingView: View {
         .contentShape(Circle())
         .padding(.leading, 16)
         .padding(.top, 16)
+    }
+
+    private static let panelSpace: String = "PCL.Swift.StartupOnboarding"
+
+    /// 收尾时让背景线条「从四周向图标逐渐变淡、最后在图标处消失」的径向遮罩。
+    ///
+    /// 遮罩恒为「中心透明、外圈不透明」的径向渐变，靠 `intensity` 在 0…1 之间插值：
+    /// 0 时整层完全可见（线条照常铺满），1 时图标一圈彻底让空。
+    /// 之所以用 `mask` 而不是直接调各线条的 `opacity`：网格、对角线、圆环是三层独立视图，
+    /// 分别淡出会出现深浅不一与接缝；遮罩对整层一次性生效，过渡必然一致。
+    /// 之所以不写 `if active { ... } else { Color.black }`：那样是瞬切，没有渐变过程。
+    private struct RadialFadeOut: ViewModifier {
+        /// 0 = 完全不遮（线条全显示），1 = 图标处完全让空。
+        let intensity: Double
+        let center: UnitPoint
+        /// 渐变铺开的半径：从图标中心算起，到这个距离以外遮罩完全实心。
+        let fadeRadius: CGFloat
+
+        /// 透明区占 `fadeRadius` 的比例。其余部分是「淡」的过渡带，
+        /// 让线条从四周向图标逐渐变淡，而不是一圈硬边。
+        private let clearRatio: Double = 0.35
+
+        func body(content: Content) -> some View {
+            content.mask {
+                RadialGradient(
+                    stops: [
+                        // 图标处：最终完全透明，线条在此消失。
+                        .init(color: .black.opacity(1 - intensity), location: 0),
+                        .init(color: .black.opacity(1 - intensity), location: clearRatio),
+                        // 往外逐渐恢复，到 fadeRadius 之外完全不受影响。
+                        .init(color: .black, location: 1)
+                    ],
+                    center: center,
+                    startRadius: 0,
+                    endRadius: fadeRadius
+                )
+                // 渐入：只在收尾阶段插值，避免动画过程中遮罩提前生效。
+                .animation(.easeInOut(duration: 1.1), value: intensity)
+            }
+        }
     }
 
     // MARK: - 动画元素
@@ -239,7 +320,6 @@ struct StartupOnboardingView: View {
             }
         }
         .compositingGroup()
-        .opacity(properties.convertToLogo ? 0 : 1)
     }
 
     @ViewBuilder
@@ -262,7 +342,6 @@ struct StartupOnboardingView: View {
                 .rotationEffect(.degrees(39))
         }
         .compositingGroup()
-        .opacity(properties.convertToLogo ? 0 : 1)
     }
 
     // MARK: - 时间线
@@ -278,6 +357,8 @@ struct StartupOnboardingView: View {
         var animateGridLines: Bool = false
         var animateDiagonalLines: Bool = false
         var convertToLogo: Bool = false
+        /// 收尾时背景线条的径向淡出强度：0 保留全部线条，1 在图标处完全让空。
+        var fadeBackgroundLines: Bool = false
     }
 
     private struct AnimationStep {
@@ -306,7 +387,10 @@ struct StartupOnboardingView: View {
             // 8) 显示对角引导线。
             .init(delay: 0.15, animation: .linear(duration: 0.5)) { $0.animateDiagonalLines = true },
             // 9) 场景收拢为 Logo，并显示内容区域。
-            .init(delay: 0.5, animation: .interpolatingSpring(stiffness: 170, damping: 17)) { $0.convertToLogo = true }
+            .init(delay: 0.5, animation: .interpolatingSpring(stiffness: 170, damping: 17)) { $0.convertToLogo = true },
+            // 10) 线条不再是整层消失，而是从面板四周向图标逐渐变淡、最后在图标处让空。
+            //     缓入缓出、持续 1.1s，和上一步的收拢弹簧错开，视觉上先收拢再淡出。
+            .init(delay: 0.45, animation: .easeInOut(duration: 1.1)) { $0.fadeBackgroundLines = true }
         ]
 
         for step in steps {
@@ -319,6 +403,16 @@ struct StartupOnboardingView: View {
 
     private func handleClose() {
         NSApplication.shared.terminate(nil)
+    }
+}
+
+/// 上报图标在面板坐标系里的位置，供背景的径向淡出确定中心。
+private struct LogoFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next: CGRect = nextValue()
+        if next != .zero { value = next }
     }
 }
 
