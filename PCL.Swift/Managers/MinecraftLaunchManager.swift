@@ -60,6 +60,7 @@ class MinecraftLaunchManager: ObservableObject {
                 }
             }
             self.loadingViewModel.text = "已启动游戏"
+            self.applyLauncherVisibility()
         }
         TaskManager.shared.execute(task: task, display: false) { _ in
             self.task = nil
@@ -86,6 +87,29 @@ class MinecraftLaunchManager: ObservableObject {
         }
     }
     
+    /// 按设置调整启动器窗口的可见性。
+    ///
+    /// 关闭启动器用 NSApplication.terminate：直接 kill 进程会让
+    /// applicationWillTerminate 里那几处落盘（配置、资源缓存、实例）
+    /// 全部跳过，用户的改动就丢了。
+    @MainActor
+    private func applyLauncherVisibility() {
+        let visibility: LauncherVisibility = .resolve(instance: nil)
+        switch visibility {
+        case .keepVisible:
+            break
+        case .minimize:
+            log("已根据设置最小化启动器")
+            NSApplication.shared.windows.first?.miniaturize(nil)
+        case .hide:
+            log("已根据设置隐藏启动器")
+            NSApplication.shared.hide(nil)
+        case .close:
+            log("已根据设置关闭启动器")
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
     private func onGameCrash(instance: MinecraftInstance, options: LaunchOptions, logURL: URL) {
         hint("检测到 Minecraft 发生崩溃，崩溃分析已开始……", type: .critical)
         MessageBoxManager.shared.showText(
@@ -179,10 +203,12 @@ class MinecraftLaunchManager: ObservableObject {
         case 0: "检查 Java"
         case 1: "刷新账号"
         case 2: "预检查"
-        case 3: "检查资源完整性"
-        case 4: "检查 Authlib Injector"
-        case 5: "启动游戏"
-        case 6: "等待游戏窗口出现"
+        case 3: "执行启动前命令"
+        case 4: "内存优化"
+        case 5: "检查资源完整性"
+        case 6: "检查 Authlib Injector"
+        case 7: "启动游戏"
+        case 8: "等待游戏窗口出现"
         default: "\(ordinal)"
         }
     }

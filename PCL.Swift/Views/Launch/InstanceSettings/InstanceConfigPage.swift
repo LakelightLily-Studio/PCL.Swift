@@ -10,18 +10,28 @@ import Core
 
 struct InstanceConfigPage: View {
     @StateObject private var viewModel: InstanceConfigViewModel
-    @StateObject private var instanceVM: InstanceViewModel
-    @StateObject private var loadingVM: MyLoadingViewModel = .init(text: "加载中")
-    
+
     init(instanceManager: InstanceManager, id: String) {
         self._viewModel = .init(wrappedValue: .init(instanceManager: instanceManager, id: id))
-        self._instanceVM = .init(wrappedValue: InstanceViewModel(instanceManager: instanceManager))
     }
-    
+
     var body: some View {
         CardContainer {
             MyCard(nil, padding: 10) {
-                MyListItem(.init(image: viewModel.icon, name: viewModel.instance.name, description: viewModel.description))
+                MyListItem { _ in
+                    HStack(spacing: 0) {
+                        InstanceIconView(icon: viewModel.icon)
+                            .frame(width: 36, height: 36)
+                            .padding(.trailing, 6)
+                        VStack(alignment: .leading, spacing: 2) {
+                            MyText(viewModel.instance.title)
+                                .lineLimit(1)
+                            MyText(viewModel.description, color: .colorGray3)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
             }
             MyCard(nil) {
                 HStack {
@@ -32,14 +42,14 @@ struct InstanceConfigPage: View {
                     MyButton("删除实例", type: .red) {
                         MessageBoxManager.shared.showText(
                             title: "确认",
-                            content: "你确定要删除这个实例（\(viewModel.instance.name)）吗？\n这个实例的所有存档、模组、资源包等将会永久消失！（真的很久！）",
+                            content: "你确定要删除这个实例（\(viewModel.instance.title)）吗？\n这个实例的所有存档、模组、资源包等将会永久消失！（真的很久！）",
                             level: .error,
                             .no(),
                             .yes(type: .red)
                         ) { result in
                             if result == 1 {
                                 do {
-                                    try instanceVM.deleteInstance(viewModel.instance)
+                                    try viewModel.deleteInstance()
                                     hint("删除成功！", type: .finish)
                                     AppRouter.shared.removeLast()
                                 } catch {
@@ -54,11 +64,15 @@ struct InstanceConfigPage: View {
                 .frame(height: 35)
             }
             .cardIndex(1)
-            jvmCard
-                .cardIndex(2)
+            jvmCard.cardIndex(2)
+            windowCard.cardIndex(3)
+            processCard.cardIndex(4)
+            advancedCard.cardIndex(5)
         }
     }
-    
+
+    // MARK: - JVM
+
     @ViewBuilder
     private var jvmCard: some View {
         MyCard("JVM 设置", foldable: false) {
@@ -99,8 +113,6 @@ struct InstanceConfigPage: View {
                                 )
                             }
                         } catch {
-                            // switchJava 目前只抛 Error.invalidJavaVersion（上面已单独处理），
-                            // 其余错误按 UI 兜底处理，避免切换 Java 时静默失败。
                             err("切换 Java 失败：\(error.localizedDescription)")
                             hint("切换 Java 失败：\(error.localizedDescription)", type: .critical)
                         }
@@ -114,7 +126,110 @@ struct InstanceConfigPage: View {
             .padding(.top, 12)
         }
     }
-    
+
+    // MARK: - 窗口
+
+    @ViewBuilder
+    private var windowCard: some View {
+        MyCard("游戏窗口", foldable: false) {
+            configLine(label: "窗口标题") {
+                MyTextField(text: $viewModel.windowTitle, placeholder: "留空则使用游戏自身标题")
+                    .disabled(viewModel.followsGlobalWindowTitle)
+                followToggle($viewModel.followsGlobalWindowTitle)
+            }
+
+            if !GameWindowTitle.isTrusted {
+                MyTip(text: "修改游戏窗口标题需要「辅助功能」权限，可以在「设置 → 游戏」里授权。", theme: .yellow)
+            }
+            configLine(label: "窗口模式") {
+                MySelect($viewModel.windowType, entries: GameWindowType.allCases)
+            }
+            if viewModel.windowType == .custom {
+                configLine(label: "窗口大小") {
+                    MyTextField(text: $viewModel.windowWidth)
+                        .frame(width: 80)
+                        .disabled(viewModel.followsGlobalWindowSize)
+                    MyText("×")
+                    MyTextField(text: $viewModel.windowHeight)
+                        .frame(width: 80)
+                        .disabled(viewModel.followsGlobalWindowSize)
+                    followToggle($viewModel.followsGlobalWindowSize)
+                }
+            }
+            saveRow
+        }
+    }
+
+    // MARK: - 进程
+
+    @ViewBuilder
+    private var processCard: some View {
+        MyCard("启动行为", foldable: false) {
+            configLine(label: "启动器可见性") {
+                MySelect($viewModel.launcherVisibility, entries: LauncherVisibility.allCases)
+                    .frame(width: 200)
+                    .disabled(viewModel.followsGlobalVisibility)
+                followToggle($viewModel.followsGlobalVisibility)
+            }
+            configLine(label: "进程优先级") {
+                MySelect($viewModel.processPriority, entries: ProcessPriority.allCases)
+                    .frame(width: 120)
+                    .disabled(viewModel.followsGlobalPriority)
+                followToggle($viewModel.followsGlobalPriority)
+            }
+            configLine(label: "启动前执行命令") {
+                MyTextField(text: $viewModel.prelaunchCommand, placeholder: "例如 rm -rf caches/ 或 open -a CleanMyMac")
+                    .disabled(viewModel.followsGlobalPrelaunch)
+                followToggle($viewModel.followsGlobalPrelaunch)
+            }
+            configLine(label: "等待命令完成") {
+                MyComboBox(checked: $viewModel.prelaunchWaitForCompletion, text: "命令执行完成后才继续启动")
+                Spacer(minLength: 0)
+            }
+            configLine(label: "内存优化") {
+                MyComboBox(checked: $viewModel.memoryOptimize, text: "启动游戏前进行内存优化")
+                    .disabled(viewModel.followsGlobalMemoryOptimize)
+                followToggle($viewModel.followsGlobalMemoryOptimize)
+            }
+            saveRow
+        }
+    }
+
+    // MARK: - 高级
+
+    @ViewBuilder
+    private var advancedCard: some View {
+        MyCard("游戏参数", foldable: false) {
+            configLine(label: "附加游戏参数") {
+                MyTextField(text: $viewModel.gameArguments, placeholder: "例如 --server example.com --port 25565")
+                    .disabled(viewModel.followsGlobalGameArguments)
+                followToggle($viewModel.followsGlobalGameArguments)
+            }
+            MyTip(text: "窗口相关的 --width / --height / --fullscreen 会被上面的「游戏窗口」设置接管，在这里重复填写不会生效。", theme: .blue)
+            saveRow
+        }
+    }
+
+    // MARK: - 组件
+
+    /// 「跟随全局」开关。勾上时输入框禁用，值取全局设置。
+    private func followToggle(_ binding: Binding<Bool>) -> some View {
+        MyComboBox(checked: binding, text: "跟随全局")
+    }
+
+    private var saveRow: some View {
+        HStack {
+            Spacer()
+            MyButton("保存设置", type: .highlight) {
+                viewModel.save()
+                hint("实例设置已保存！", type: .finish)
+            }
+            .frame(width: 120)
+        }
+        .frame(height: 35)
+        .padding(.top, 8)
+    }
+
     @ViewBuilder
     private func configLine(label: String,  @ViewBuilder body: () -> some View) -> some View {
         SettingRow(label, content: body)

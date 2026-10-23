@@ -73,6 +73,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DownloadSourceManager.install(.init(policy: LauncherConfig.shared.downloadSourcePolicy, curseforgeApiKey: Secrets.shared.curseforgeApiKey))
         
         FlagsManager.install(.init(enabledFlags: LauncherConfig.shared.enabledFlags))
+
+        // Core 读不到 App 层的 LauncherConfig，启动时把默认值灌进去一次。
+        LauncherConfigDefaults.launcherVisibility = LauncherConfig.shared.launcherVisibility
+        LauncherConfigDefaults.processPriority = LauncherConfig.shared.processPriority
+        LauncherConfigDefaults.memoryOptimize = LauncherConfig.shared.memoryOptimize
         
         JavaManager.install(.init(customJavaRuntimes: LauncherConfig.shared.customJavaRuntimes))
         

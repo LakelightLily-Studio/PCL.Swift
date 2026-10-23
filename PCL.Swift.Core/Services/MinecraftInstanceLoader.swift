@@ -87,6 +87,11 @@ public enum MinecraftInstanceLoader {
             modLoader: detectModLoader(runningDirectory: runningDirectory),
             manifest: manifest,
             config: config,
+            displayName: metadata?.displayName,
+            customIconURL: metadata?.customIconURL,
+            customDescription: metadata?.customDescription,
+            isFavorite: metadata?.isFavorite ?? false,
+            category: metadata?.category,
             dirty: dirty
         )
     }
@@ -201,9 +206,47 @@ public enum MinecraftInstanceLoader {
         } catch { return nil }
     }
     
+    /// 元数据文件（.clmetadata.json）的内容。
+    ///
+    /// 全部字段都带默认值：老版本写出的文件里没有新增的键，解码时不能因此失败，
+    /// 否则升级后所有实例都会退化成"配置加载失败"。
     private struct InstanceMetadata: Codable {
-        public let uuid: UUID
-        public let version: MinecraftVersion?
+        public var uuid: UUID
+        public var version: MinecraftVersion?
+        public var displayName: String?
+        public var customIconURL: URL?
+        public var customDescription: String?
+        public var isFavorite: Bool
+        public var category: String?
+
+        init(
+            uuid: UUID,
+            version: MinecraftVersion?,
+            displayName: String? = nil,
+            customIconURL: URL? = nil,
+            customDescription: String? = nil,
+            isFavorite: Bool = false,
+            category: String? = nil
+        ) {
+            self.uuid = uuid
+            self.version = version
+            self.displayName = displayName
+            self.customIconURL = customIconURL
+            self.customDescription = customDescription
+            self.isFavorite = isFavorite
+            self.category = category
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.uuid = try container.decode(UUID.self, forKey: .uuid)
+            self.version = try container.decodeIfPresent(MinecraftVersion.self, forKey: .version)
+            self.displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+            self.customIconURL = try container.decodeIfPresent(URL.self, forKey: .customIconURL)
+            self.customDescription = try container.decodeIfPresent(String.self, forKey: .customDescription)
+            self.isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+            self.category = try container.decodeIfPresent(String.self, forKey: .category)
+        }
     }
     
     public enum LoadError: LocalizedError {
@@ -290,7 +333,15 @@ public extension MinecraftInstanceLoader {
         }
         
         let metadataData: Data
-        let metadata = InstanceMetadata(uuid: instance.id, version: instance.version)
+        let metadata = InstanceMetadata(
+            uuid: instance.id,
+            version: instance.version,
+            displayName: instance.displayName,
+            customIconURL: instance.customIconURL,
+            customDescription: instance.customDescription,
+            isFavorite: instance.isFavorite,
+            category: instance.category
+        )
         do {
             metadataData = try JSONEncoder.shared.encode(metadata)
         } catch {

@@ -30,10 +30,12 @@ public enum MinecraftLaunchTask {
             .init(0, "检查 Java", checkJava(task:model:)),
             .init(1, "刷新账号", refreshAccount(task:model:)),
             .init(2, "预检查", precheck(task:model:)),
-            .init(3, "检查资源完整性", checkResources(task:model:)),
-            .init(4, "检查 Authlib Injector", checkAuthlibInjector(task:model:)),
-            .init(5, "启动游戏", launch(task:model:)),
-            .init(6, "等待游戏窗口出现", display: false, waitForWindow(task:model:))
+            .init(3, "执行启动前命令", runPrelaunchCommand(task:model:)),
+            .init(4, "内存优化", display: false, optimizeMemory(task:model:)),
+            .init(5, "检查资源完整性", checkResources(task:model:)),
+            .init(6, "检查 Authlib Injector", checkAuthlibInjector(task:model:)),
+            .init(7, "启动游戏", launch(task:model:)),
+            .init(8, "等待游戏窗口出现", display: false, waitForWindow(task:model:))
         )
     }
     
@@ -238,6 +240,54 @@ public enum MinecraftLaunchTask {
         }
     }
     
+    /// 执行启动前命令。
+    ///
+    /// 放在资源校验之前：这条命令的典型用途是清理缓存、关掉占内存的软件，
+    /// 让后面的校验与启动跑在更干净的环境里。命令为空时整步直接跳过，
+    /// 不会在任务列表里留下一个一闪而过的空步骤。
+    private static func runPrelaunchCommand(task: SubTask, model: Model) async throws {
+        let command: String = model.settings.prelaunchCommand
+        guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        do {
+            try await PrelaunchCommand.run(
+                command,
+                wait: model.settings.prelaunchWaitForCompletion
+            ) { text in
+                log("启动前命令输出：\(text.trimmingCharacters(in: .newlines))")
+            }
+        } catch {
+            err("启动前命令执行失败：\(error.localizedDescription)")
+            let result: Int = await MessageBoxManager.shared.showTextAsync(
+                title: "启动前命令执行失败",
+                content: "启动前命令执行失败：\(error.localizedDescription)\n\n是否继续启动？",
+                level: .error,
+                .no(),
+                .yes(label: "继续启动", type: .red)
+            )
+            if result == 0 {
+                try task.cancel()
+            }
+        }
+    }
+
+    /// 启动前内存优化。
+    ///
+    /// macOS 上没有 Windows 那种"清空工作集"的接口，能做的是：
+    /// 把本启动器自己占用的缓存释放掉（解码过的图片、资源列表、版本清单），
+    /// 再让系统回收一次闲置页。收益有限，所以默认关闭。
+    private static func optimizeMemory(task: SubTask, model: Model) async throws {
+        guard model.settings.memoryOptimize else { return }
+        log("正在执行启动前内存优化")
+        await MainActor.run {
+            // 资源列表与图标缓存是启动器里最大的一块常驻内存。
+            ResourceCache.shared.releaseIcons()
+        }
+        // 让系统回收本进程的闲置页；对游戏进程没有直接影响，
+        // 但能减少启动器在后台与游戏抢内存的概率。
+        autoreleasepool { }
+        log("内存优化完成")
+    }
+
     private static func checkResources(task: SubTask, model: Model) async throws {
         // 防止本地库架构与 Java 架构不同，先清除本地库
         let nativesDirectory: URL = model.instance.url.appending(path: "natives")
@@ -347,6 +397,10 @@ public enum MinecraftLaunchTask {
                     break
                 }
                 if checkWindows(for: process) {
+                    // 窗口出现后再改名：更早调用时 AX 还读不到窗口列表。
+                    if let title = model.options.windowTitle {
+                        GameWindowTitle.apply(title: title, to: process.processIdentifier)
+                    }
                     break
                 }
                 try await Task.sleep(seconds: 1)
@@ -379,7 +433,9 @@ public enum MinecraftLaunchTask {
         public var launcher: MinecraftLauncher?
         public var options: LaunchOptions
         public var process: Process?
-        
+        /// 本次启动最终生效的设置（实例覆盖值已与全局默认值合并）。
+        let settings: ResolvedLaunchSettings
+
         init(instance: MinecraftInstance, account: Account, repository: MinecraftRepository, onProcessStarted: @escaping (MinecraftLauncher, Process) -> Void) {
             self.instance = instance
             self.account = account
@@ -387,12 +443,20 @@ public enum MinecraftLaunchTask {
             self.onProcessStarted = onProcessStarted
             self.manifest = instance.manifest
             self.options = .init()
-            
+            let settings: ResolvedLaunchSettings = .resolve(instance: instance.config)
+            self.settings = settings
+
             self.options.profile = account.profile
             self.options.runningDirectory = instance.url
             self.options.repository = repository
-            self.options.memory = instance.config.jvmHeapSize
-            self.options.extraJvmArguments = instance.config.jvmArguments
+            self.options.memory = settings.memory
+            self.options.extraJvmArguments = settings.jvmArguments
+            self.options.extraGameArguments = settings.gameArguments
+            self.options.windowTitle = settings.windowTitle.isEmpty ? nil : settings.windowTitle
+            self.options.windowType = settings.windowType
+            self.options.windowWidth = settings.windowWidth
+            self.options.windowHeight = settings.windowHeight
+            self.options.processPriority = settings.processPriority
         }
     }
 }
