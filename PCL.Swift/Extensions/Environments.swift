@@ -37,6 +37,20 @@ extension EnvironmentValues {
 }
 
 extension View {
+    /// 强制显示滚动条。
+    ///
+    /// macOS 默认是"滚动时才显示"，用户看到一屏内容时根本不知道右边还有东西。
+    /// scrollIndicators(.visible) 是 macOS 13 才有的 API，12.0 上退回原样
+    /// （那时只能靠系统设置里的「始终显示滚动条」）。
+    @ViewBuilder
+    func alwaysShowScrollIndicators() -> some View {
+        if #available(macOS 13.0, *) {
+            self.scrollIndicators(.visible)
+        } else {
+            self
+        }
+    }
+
     func cardIndex(_ index: Int) -> some View {
         environment(\.cardIndex, index)
     }

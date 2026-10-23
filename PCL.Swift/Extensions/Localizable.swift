@@ -81,6 +81,7 @@ extension ResourceType: Localizable {
         case .modpack: "整合包"
         case .resourcepack: "资源包"
         case .shader: "光影包"
+        case .datapack: "数据包"
         }
     }
 }

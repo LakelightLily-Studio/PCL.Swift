@@ -16,6 +16,10 @@ struct TitleBarView: View {
 
     @ObservedObject private var router: AppRouter = .shared
     @ObservedObject private var flagsManager: FlagsManager = .shared
+    @ObservedObject private var configObserver: LauncherConfigObserver = .shared
+    /// 直接观察 ThemeManager：拖自定义滑杆时视图树不重建（revision 不动），
+    /// 只有观察 palette 的视图才会实时换色。标题栏是用户最先看的地方，必须跟着变。
+    @ObservedObject private var themeManager: ThemeManager = .shared
     
     var body: some View {
         ZStack(alignment: .leading) {
@@ -30,20 +34,8 @@ struct TitleBarView: View {
                         MyText(router.title, size: 16, color: .white)
                     }
                 } else {
-                    HStack {
-                        // 标题栏沿用 PCL 的白色线条字标（配合右侧的 "Swift" 标签读作 PCL.Swift）；
-                        // App 图标只用在开场动画里，不要挪到这里。
-                        Image(.iconTitleLogo)
-                            .resizable()
-                            .scaledToFit()
-                            .foregroundStyle(.white)
-                            .frame(height: 19)
-                        MyTag("Swift", labelColor: .color2)
-                        
-                        if Metadata.debugMode {
-                            MyTag("Debug", backgroundColor: Color(0x9BF00B))
-                        }
-                    }
+                    // 主页按钮组始终居中；Logo 的位置由设置决定（默认居左，
+                    // 与 PCL 原版一致；选择居中时按钮组仍在原位，两者不重叠）。
                     HStack {
                         Spacer()
                         PageButton("启动", .iconLaunchPage, .launch)
@@ -55,6 +47,12 @@ struct TitleBarView: View {
                         PageButton("更多", .iconMorePage, .more)
                         Spacer()
                     }
+
+                    // 标识固定靠左：位置选项已移除，避免和居中的按钮组抢位置。
+                    HStack {
+                        logoView
+                        Spacer()
+                    }
                 }
             }
             // 三色按钮由系统画在透明标题栏里（关闭 + 最小化，缩放按钮恒隐藏），
@@ -62,6 +60,50 @@ struct TitleBarView: View {
             .padding(.leading, Self.trafficLightReservedWidth)
         }
         .frame(height: AppWindow.titleBarHeight)
+    }
+
+    /// 标题栏左侧的标识：默认 Logo、自定义文本或自定义图片。
+    ///
+    /// 三种形态共用同一块布局位置，切换时不会让右侧按钮组跳动。
+    @ViewBuilder
+    private var logoView: some View {
+        switch LauncherConfig.shared.titleBarLogoType {
+        case .logo:
+            HStack(spacing: 4) {
+                // 标题栏沿用 PCL 的白色线条字标（配合右侧的 "Swift" 标签读作 PCL.Swift）；
+                // App 图标只用在开场动画里，不要挪到这里。
+                Image(.iconTitleLogo)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.white)
+                    .frame(height: 19)
+                MyTag("Swift", labelColor: .color2)
+
+                if Metadata.debugMode {
+                    MyTag("Debug", backgroundColor: Color(0x9BF00B))
+                }
+            }
+        case .text:
+            MyText(
+                LauncherConfig.shared.titleBarText.isEmpty ? "PCL.Swift" : LauncherConfig.shared.titleBarText,
+                size: 16,
+                color: .white
+            )
+            .lineLimit(1)
+        case .image:
+            if let url = LauncherConfig.shared.titleBarImageURL, let image = NSImage(contentsOf: url) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 22)
+            } else {
+                Image(.iconTitleLogo)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.white)
+                    .frame(height: 19)
+            }
+        }
     }
 }
 

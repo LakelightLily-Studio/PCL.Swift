@@ -348,11 +348,24 @@ struct SetupWizardView: View {
                 .font(.system(size: 13))
                 .foregroundStyle(Color.colorGray2)
 
-            HStack(spacing: 16) {
-                ForEach(Theme.allCases, id: \.self) { theme in
-                    themeCard(theme)
+            // 主题现在有 15 个，横排一行必然超出窗口——而这一行的最小宽度会
+            // 反向撑大整个 VStack，把上面的步骤条和下面的按钮一起顶出窗口。
+            // 所以改成自适应网格 + 纵向滚动：列数由可用宽度决定，
+            // 宽度再窄也只会往下换行，不会横向溢出。
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 132, maximum: 200), spacing: 12)],
+                    alignment: .leading,
+                    spacing: 12
+                ) {
+                    ForEach(Theme.allCases, id: \.self) { theme in
+                        themeCard(theme)
+                    }
                 }
+                .padding(.vertical, 2)
             }
+            .alwaysShowScrollIndicators()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
@@ -370,21 +383,22 @@ struct SetupWizardView: View {
     }
 
     private func cardBody(_ theme: Theme, isCurrent: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let palette: ThemePalette = ThemeManager.shared.palette(for: theme)
+        return VStack(alignment: .leading, spacing: 0) {
             // 色卡：主色铺底 + 三档阶梯，直观呈现选中态与描边的观感。
             VStack(spacing: 6) {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(theme.primary)
+                    .fill(palette.primary)
                     .frame(height: 26)
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { index in
                         RoundedRectangle(cornerRadius: 3)
-                            .fill([theme.tint, theme.soft, theme.faint][index])
+                            .fill([palette.tint, palette.soft, palette.faint][index])
                             .frame(height: 14)
                     }
                 }
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(theme.background)
+                    .fill(palette.background)
                     .frame(height: 18)
             }
             .padding(10)
@@ -403,11 +417,12 @@ struct SetupWizardView: View {
             .padding(.horizontal, 10)
             .padding(.bottom, 10)
         }
-        .frame(width: 190)
+        // 宽度交给网格决定：写死 190 会让自适应列宽失效。
+        .frame(maxWidth: .infinity)
         .background(Color.colorGray8, in: RoundedRectangle(cornerRadius: 6))
         .overlay {
             RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(isCurrent ? theme.primary : Color.clear, lineWidth: 2)
+                .strokeBorder(isCurrent ? palette.primary : Color.clear, lineWidth: 2)
                 // 描边层只是装饰：不关掉命中测试的话它会把整张卡片的点击吃掉。
                 .allowsHitTesting(false)
         }
