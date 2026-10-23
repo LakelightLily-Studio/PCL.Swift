@@ -20,6 +20,8 @@ class InstanceViewModel: ObservableObject {
     private let instanceManager: InstanceManager
     private var cancellables: Set<AnyCancellable> = []
     private var currentRepositoryCancellable: AnyCancellable?
+    /// 当前实例自身的变更订阅。改图标/改名后侧边栏的启动按钮要跟着更新。
+    private var currentInstanceCancellable: AnyCancellable?
     
     public init(instanceManager: InstanceManager) {
         self.instanceManager = instanceManager
@@ -77,5 +79,24 @@ class InstanceViewModel: ObservableObject {
     private func observeCurrentRepository() {
         currentRepositoryCancellable = instanceManager.currentRepository.objectWillChange
             .sink(receiveValue: objectWillChange.send)
+        observeCurrentInstance()
+    }
+
+    /// 订阅当前实例的变更。
+    ///
+    /// 实例被换掉时要重新订阅，否则改的是新实例、听的还是旧的。
+    private func observeCurrentInstance() {
+        currentInstanceCancellable = instanceManager.currentRepository.$currentInstanceId
+            .flatMap { [weak self] _ -> AnyPublisher<Void, Never> in
+                guard let self, let instance = self.currentInstance else {
+                    return Just(()).eraseToAnyPublisher()
+                }
+                return instance.objectWillChange
+                    .map { _ in () }
+                    .eraseToAnyPublisher()
+            }
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
     }
 }

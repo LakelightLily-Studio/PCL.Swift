@@ -14,6 +14,8 @@ class InstanceListViewModel: ObservableObject {
     @Published public private(set) var vanillaInstances: [MinecraftInstance]? = nil
     @Published public private(set) var moddedInstances: [MinecraftInstance]? = nil
     @Published public private(set) var errorInstances: [ErrorInstance]? = nil
+    /// 收藏的实例。单独一组置顶显示，不参与"可安装 Mod / 常规实例"的划分。
+    @Published public private(set) var favorites: [MinecraftInstance]? = nil
     @Published public private(set) var loading: Bool = false
     
     public var instanceCount: Int? {
@@ -32,6 +34,7 @@ class InstanceListViewModel: ObservableObject {
         
         self.vanillaInstances = repository.instances.map { Self.processInstanceList(Array($0.values), modded: false) }
         self.moddedInstances = repository.instances.map { Self.processInstanceList(Array($0.values), modded: true) }
+        self.favorites = repository.instances.map { Self.processFavorites(Array($0.values)) }
         self.errorInstances = repository.errorInstances
         
         self.repository.$instances
@@ -46,6 +49,12 @@ class InstanceListViewModel: ObservableObject {
             .assign(to: \.moddedInstances, on: self)
             .store(in: &cancellables)
         
+        self.repository.$instances
+            .map { $0.map { Self.processFavorites(Array($0.values)) } }
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.favorites, on: self)
+            .store(in: &cancellables)
+
         self.repository.$errorInstances
             .receive(on: DispatchQueue.main)
             .assign(to: \.errorInstances, on: self)
@@ -77,9 +86,17 @@ class InstanceListViewModel: ObservableObject {
         lhs.version > rhs.version
     }
     
+    /// 非收藏的实例才进入下面两组，避免同一个实例出现两次。
     private static func processInstanceList(_ instances: [MinecraftInstance], modded: Bool) -> [MinecraftInstance] {
         Array(instances)
+            .filter { !$0.isFavorite }
             .filter { modded ? $0.modLoader != nil : $0.modLoader == nil }
+            .sorted(by: Self.compareInstance(lhs:rhs:))
+    }
+
+    private static func processFavorites(_ instances: [MinecraftInstance]) -> [MinecraftInstance] {
+        Array(instances)
+            .filter(\.isFavorite)
             .sorted(by: Self.compareInstance(lhs:rhs:))
     }
 }

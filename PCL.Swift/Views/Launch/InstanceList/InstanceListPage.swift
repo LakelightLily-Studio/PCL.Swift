@@ -113,21 +113,62 @@ struct InstanceListPage: View {
 }
 
 private struct InstanceView: View {
-    private let name: String
-    private let version: MinecraftVersion
-    private let icon: ImageResource
-    
+    /// 直接观察实例：改图标、改名、改收藏后这里会自动刷新。
+    @ObservedObject private var instance: MinecraftInstance
+
     init(instance: MinecraftInstance) {
-        self.name = instance.name
-        self.version = instance.version
-        if let modLoader = instance.modLoader {
-            self.icon = modLoader.icon
-        } else {
-            self.icon = .iconGrassBlock
+        self.instance = instance
+    }
+
+    var body: some View {
+        MyListItem { _ in
+            HStack(spacing: 0) {
+                InstanceIconView(icon: instance.icon)
+                    .frame(width: 36, height: 36)
+                    .padding(.trailing, 6)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    MyText(instance.title)
+                        .lineLimit(1)
+                    MyText(description, color: .colorGray3)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
         }
     }
-    
+
+    /// 描述优先用用户填的，其次退回"版本 + 加载器 + 分类"。
+    private var description: String {
+        var parts: [String] = [instance.version.id]
+        if let loader = instance.modLoader { parts.append(loader.description) }
+        if let category = instance.category, !category.isEmpty { parts.append("分类：\(category)") }
+        if let custom = instance.customDescription, !custom.isEmpty { parts.append(custom) }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// 统一的实例图标渲染。所有显示实例图标的地方都用它，避免各写一份分支。
+struct InstanceIconView: View {
+    let icon: InstanceIcon
+
     var body: some View {
-        MyListItem(.init(image: icon, name: name, description: version.id))
+        switch icon {
+        case .custom(let image):
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+        case .loader(let loader):
+            Image(loader.icon)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(Color.color1)
+        case .fallback:
+            Image(.iconGrassBlock)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(Color.color1)
+        }
     }
 }

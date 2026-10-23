@@ -1,0 +1,205 @@
+//
+//  InstanceOverviewViewModel.swift
+//  PCL.Swift
+//
+//  实例概览页的数据与元数据修改。
+//
+
+import Foundation
+import AppKit
+import Combine
+import Core
+
+@MainActor
+class InstanceOverviewViewModel: ObservableObject {
+    public private(set) var instance: MinecraftInstance
+    /// 自定义图标解码结果。nil 表示使用回退图标。
+    @Published public private(set) var iconImage: NSImage?
+    /// 目录列表。
+    ///
+    /// 缓存成存储属性而不是计算属性：每个条目都要做一次 FileManager.fileExists，
+    /// 8 个目录就是 8 次同步磁盘 I/O。计算属性会在每次 body 求值时重跑一遍，
+    /// 卡片入场动画期间每帧都求值，这正是实例设置页卡顿的来源。
+    @Published public private(set) var folders: [Folder] = []
+
+    private let instanceManager: InstanceManager
+    private var instanceCancellable: AnyCancellable?
+
+    public var instanceName: String { instance.name }
+    public var displayTitle: String { instance.title }
+    public var subtitle: String {
+        if let modLoader: ModLoader = instance.modLoader {
+            return "\(instance.version.id)，\(modLoader)"
+        }
+        return instance.version.id
+    }
+    public var descriptionText: String {
+        if let custom = instance.customDescription, !custom.isEmpty { return custom }
+        return "没有填写描述。"
+    }
+    /// 描述输入框的初始内容（不含占位文案）。
+    public var customDescriptionText: String { instance.customDescription ?? "" }
+    public var isFavorite: Bool { instance.isFavorite }
+    public var category: String? { instance.category }
+    public var fallbackIcon: ImageResource {
+        instance.modLoader?.icon ?? .iconGrassBlock
+    }
+
+    public init(instanceManager: InstanceManager, id: String) {
+        self.instanceManager = instanceManager
+        let instance: MinecraftInstance = instanceManager.currentRepository.instance(named: id)!
+        self.instance = instance
+        self.iconImage = Self.loadIcon(for: instance)
+        // 转发实例自身的变更：改名/改图标后页面要立刻刷新。
+        self.instanceCancellable = instance.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+            self?.iconImage = Self.loadIcon(for: instance)
+        }
+        self.folders = Self.makeFolders(for: instance)
+    }
+
+    // MARK: - 目录
+
+    struct Folder: Identifiable {
+        let key: String
+        let title: String
+        let relativePath: String
+        let url: URL
+        let exists: Bool
+        /// 点击时是否自动创建目录。存档、截图这类目录游戏首次用到才创建，
+        /// 点进去时顺手建出来比提示"不存在"更符合预期。
+        let createsOnOpen: Bool
+
+        var id: String { key }
+    }
+
+    /// 重新扫描目录状态。文件系统可能在外部被改动（例如游戏自己建了 logs）。
+    func refreshFolders() {
+        folders = Self.makeFolders(for: instance)
+    }
+
+    /// 概览页展示的目录列表。
+    ///
+    /// 只列用户真正会去找的几个：存档、Mod、资源包、光影包、截图、日志、崩溃报告。
+    /// 全部列出来会让这一屏变成文件浏览器，反而不好用。
+    private static func makeFolders(for instance: MinecraftInstance) -> [Folder] {
+        let root: URL = instance.url
+        let entries: [(String, String, String, Bool)] = [
+            ("saves", "存档文件夹", "saves", true),
+            ("mods", "Mod 文件夹", "mods", true),
+            ("resourcepacks", "资源包文件夹", "resourcepacks", true),
+            ("shaderpacks", "光影包文件夹", "shaderpacks", true),
+            ("screenshots", "截图文件夹", "screenshots", true),
+            ("logs", "日志文件夹", "logs", true),
+            ("crashReports", "崩溃报告文件夹", "crash-reports", true),
+            ("root", "版本文件夹", ".", false)
+        ]
+        return entries.map { key, title, path, createsOnOpen in
+            let url: URL = path == "." ? root : root.appending(path: path)
+            return .init(
+                key: key,
+                title: title,
+                relativePath: path == "." ? instance.name : "\(instance.name)/\(path)",
+                url: url,
+                exists: FileManager.default.fileExists(atPath: url.path),
+                createsOnOpen: createsOnOpen
+            )
+        }
+    }
+
+    func open(_ folder: Folder) {
+        if folder.createsOnOpen && !folder.exists {
+            do {
+                try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+            } catch {
+                err("创建目录 \(folder.url.lastPathComponent) 失败：\(error.localizedDescription)")
+                hint("创建目录失败：\(error.localizedDescription)", type: .critical)
+                return
+            }
+        }
+        guard FileManager.default.fileExists(atPath: folder.url.path) else {
+            hint("\(folder.title)不存在！", type: .critical)
+            return
+        }
+        NSWorkspace.shared.open(folder.url)
+    }
+
+    // MARK: - 元数据
+
+    func toggleFavorite() {
+        instance.isFavorite.toggle()
+        instance.markDirty()
+        save()
+    }
+
+    func setDisplayName(_ name: String) {
+        let trimmed: String = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 留空即恢复为"跟随文件夹名"，而不是写一个空字符串进去。
+        instance.displayName = trimmed.isEmpty ? nil : trimmed
+        instance.markDirty()
+        save()
+    }
+
+    func setDescription(_ text: String) {
+        let trimmed: String = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        instance.customDescription = trimmed.isEmpty ? nil : trimmed
+        instance.markDirty()
+        save()
+    }
+
+    func setCategory(_ text: String) {
+        let trimmed: String = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        instance.category = trimmed.isEmpty ? nil : trimmed
+        instance.markDirty()
+        save()
+    }
+
+    func setIcon(_ url: URL) {
+        // 把图标复制进实例目录，而不是记住外部路径：外部文件随时会被删，
+        // 记住路径等于让图标在某个时刻静默消失。
+        let destination: URL = instance.url.appending(path: ".clicon.\(url.pathExtension)")
+        do {
+            if let old = instance.customIconURL, old != destination {
+                try? FileManager.default.removeItem(at: old)
+            }
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: url, to: destination)
+            instance.customIconURL = destination
+            // markDirty 会广播 objectWillChange，所有观察该实例的页面一起刷新。
+            instance.markDirty()
+            save()
+            iconImage = Self.loadIcon(for: instance)
+            hint("图标已更新！", type: .finish)
+        } catch {
+            err("设置实例图标失败：\(error.localizedDescription)")
+            hint("设置实例图标失败：\(error.localizedDescription)", type: .critical)
+        }
+    }
+
+    /// 重新校验并补齐实例文件。
+    func repair() {
+        let task: MyTask<MinecraftInstallTask.Model> = MinecraftInstallTask.createRepair(
+            instance: instance,
+            repository: instanceManager.currentRepository
+        )
+        TaskManager.shared.execute(task: task)
+        AppRouter.shared.append(.tasks)
+    }
+
+    private func save() {
+        do {
+            try MinecraftInstanceLoader.save(instance)
+            instance.dirty = false
+        } catch {
+            err("保存实例配置失败：\(error.localizedDescription)")
+            hint("保存实例配置失败：\(error.localizedDescription)", type: .critical)
+        }
+    }
+
+    private static func loadIcon(for instance: MinecraftInstance) -> NSImage? {
+        guard let url = instance.customIconURL else { return nil }
+        return NSImage(contentsOf: url)
+    }
+}

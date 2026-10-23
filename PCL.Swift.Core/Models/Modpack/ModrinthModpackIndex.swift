@@ -90,4 +90,68 @@ public struct ModrinthModpackIndex: Codable {
     public let versionId: String
     public let files: [File]
     public let dependencies: Dependencies
+
+    public init(
+        formatVersion: Int,
+        name: String,
+        summary: String?,
+        game: String,
+        versionId: String,
+        files: [File],
+        dependencies: Dependencies
+    ) {
+        self.formatVersion = formatVersion
+        self.name = name
+        self.summary = summary
+        self.game = game
+        self.versionId = versionId
+        self.files = files
+        self.dependencies = dependencies
+    }
+}
+
+// MARK: - 导出用
+
+extension ModrinthModpackIndex.File {
+    /// 构造一条导出条目。导出时只有 path、sha1 与下载地址是已知的。
+    public init(path: String, hashes: [String: String], downloads: [URL]) {
+        self.path = path
+        self.hashes = hashes
+        self.env = nil
+        self.downloads = downloads
+    }
+}
+
+extension ModrinthModpackIndex.Dependencies {
+    /// 按"加载器类型 + 版本"构造依赖声明。
+    ///
+    /// 导出时只有加载器类型是可靠的（版本号常常反查不到），
+    /// 所以这里允许 modLoaderVersion 为 nil，写空串会让 Modrinth 认为是
+    /// 明确指定了版本，反而导入不了。
+    public init(minecraft: String, modLoaderType: ModLoader?, modLoaderVersion: String?) {
+        let version: String? = modLoaderVersion.flatMap { $0.isEmpty ? nil : $0 }
+        self.minecraft = minecraft
+        switch modLoaderType {
+        case .forge:
+            self.forge = version
+            self.neoforge = nil
+            self.fabricLoader = nil
+            self.quiltLoader = nil
+        case .neoforge:
+            self.forge = nil
+            self.neoforge = version
+            self.fabricLoader = nil
+            self.quiltLoader = nil
+        case .fabric:
+            self.forge = nil
+            self.neoforge = nil
+            self.fabricLoader = version
+            self.quiltLoader = nil
+        case nil:
+            self.forge = nil
+            self.neoforge = nil
+            self.fabricLoader = nil
+            self.quiltLoader = nil
+        }
+    }
 }

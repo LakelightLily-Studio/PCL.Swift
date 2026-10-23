@@ -9,6 +9,9 @@ import SwiftUI
 import Core
 
 struct LaunchSidebar: Sidebar {
+    /// 侧边栏宽度常量。容器需要在不构造实例的前提下取宽度。
+    static let widthConstant: CGFloat = 285
+
     @StateObject private var instanceVM: InstanceViewModel
     @StateObject private var accountVM: AccountViewModel = .init()
     @StateObject private var launchVM: LaunchViewModel = .init()
@@ -121,7 +124,7 @@ struct LaunchSidebar: Sidebar {
                             DSHLaunchManager.shared.launch(dsh)
                         }
                     } else if let instance = instanceVM.currentInstance {
-                        MyButton("启动游戏", subLabel: instance.name, type: .highlight) {
+                        MyButton("启动游戏", subLabel: instance.title, type: .highlight) {
                             guard !launchVM.isRunning && !launchVM.isLaunching else {
                                 hint("已有一个游戏实例正在运行！", type: .critical)
                                 return
