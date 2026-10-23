@@ -39,6 +39,18 @@ public class DownloadSourceManager {
 
     public static let officialConcurrency: Int = 64
     public static let mirrorConcurrency: Int = 16
+    /// 并发数的合法区间。上限比原版（255）保守：URLSession 在这个量级上
+    /// 已经不会更快，再高只会触发对端限流。
+    public static let concurrencyRange: ClosedRange<Int> = 1...128
+
+    /// 用户显式设置的并发数。nil 表示跟随下载源推荐值。
+    ///
+    /// 单独存一份而不是直接覆盖推荐值：换下载源时推荐值会变，
+    /// 但用户设过的数字不该被悄悄改掉。
+    public var userConcurrency: Int?
+
+    /// 用户设置的限速（字节/秒）。0 表示不限速。
+    public var speedLimit: Int64 = 0
 
     public var recommendedConcurrency: Int {
         if !isChinaRegion && policy != .mirrorFirst {
@@ -47,10 +59,29 @@ public class DownloadSourceManager {
         return Self.mirrorConcurrency
     }
 
+    /// 设置用户并发数；传 nil 恢复为跟随下载源推荐值。
+    public func setUserConcurrency(_ value: Int?) {
+        guard let value else {
+            userConcurrency = nil
+            return
+        }
+        userConcurrency = min(max(value, Self.concurrencyRange.lowerBound), Self.concurrencyRange.upperBound)
+    }
+
     public init(policy: DownloadSourcePolicy, curseforgeApiKey: String?) {
         self.policy = policy
         officialSource.curseforgeApiKey = curseforgeApiKey
     }
+
+    /// 版本列表专用策略。
+    ///
+    /// 未开启"分开设置"时跟随文件下载源，这样只有老字段的配置行为不变。
+    public var versionListPolicy: DownloadSourcePolicy {
+        separatesVersionList ? versionListSourcePolicy : policy
+    }
+
+    public var separatesVersionList: Bool = false
+    public var versionListSourcePolicy: DownloadSourcePolicy = .officialFirst
 
     /// 从云端刷新地区判断（启动时调用一次）。
     public func refreshRegion() async {
@@ -74,9 +105,13 @@ public class DownloadSourceManager {
     }
 
     /// 版本清单 URL。
+    ///
+    /// 版本列表可以单独选源：Mojang 的清单在境内偶尔抽风，而文件本身走官方源很快，
+    /// 所以两者分开配置是有意义的。
     public func versionManifestURL() -> URL? {
         preferred(official: officialSource.versionManifestURL(),
-                  mirror: mirrorSource.versionManifestURL())
+                  mirror: mirrorSource.versionManifestURL(),
+                  policy: versionListPolicy)
     }
 
     /// Forge 版本列表 URL。
@@ -97,10 +132,11 @@ public class DownloadSourceManager {
                   mirror: mirrorSource.fabricVersionListURL(for: mcVersion))
     }
     
-    private func preferred(official: URL?, mirror: URL?) -> URL? {
-        let preferMirror = policy == .mirrorFirst
+    private func preferred(official: URL?, mirror: URL?, policy: DownloadSourcePolicy? = nil) -> URL? {
+        let effectivePolicy: DownloadSourcePolicy = policy ?? self.policy
+        let preferMirror = effectivePolicy == .mirrorFirst
 
-        if !isChinaRegion && policy != .mirrorFirst {
+        if !isChinaRegion && effectivePolicy != .mirrorFirst {
             return official ?? mirror
         }
 

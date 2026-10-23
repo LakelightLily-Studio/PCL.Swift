@@ -115,13 +115,40 @@ class ResourceInstallViewModel: ObservableObject {
         }
     }
     
-    public func createInstallTask(forVersion version: ProjectVersionModel, to instance: MinecraftInstance) async throws -> MyTask<EmptyModel> {
+    /// 列出实例里已有的存档名。
+    ///
+    /// 数据包的作用域是单个存档（saves/<存档>/datapacks/），所以安装前必须先选存档。
+    public static func saves(of instance: MinecraftInstance) -> [String] {
+        let savesURL: URL = instance.url.appending(path: "saves")
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: savesURL,
+            includingPropertiesForKeys: [.isDirectoryKey]
+        ) else { return [] }
+        return entries
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .map(\.lastPathComponent)
+            .sorted()
+    }
+
+    public func createInstallTask(
+        forVersion version: ProjectVersionModel,
+        to instance: MinecraftInstance,
+        saveName: String? = nil
+    ) async throws -> MyTask<EmptyModel> {
         guard let primaryFile = version.primaryFile else {
             throw SimpleError("这个版本中没有主要文件！")
         }
-        
-        let saveDirectoryName = project.type.saveDirectory ?? ""
-        let saveDirectoryURL = instance.url.appending(path: saveDirectoryName)
+
+        let saveDirectoryURL: URL
+        if project.type == .datapack {
+            guard let saveName, !saveName.isEmpty else {
+                throw SimpleError("安装数据包前必须先选择一个存档。")
+            }
+            saveDirectoryURL = instance.url.appending(path: "saves/\(saveName)/datapacks")
+        } else {
+            let saveDirectoryName = project.type.saveDirectory ?? ""
+            saveDirectoryURL = instance.url.appending(path: saveDirectoryName)
+        }
         
         return .init(
             name: "资源下载 - \(project.title) \(version.version)",

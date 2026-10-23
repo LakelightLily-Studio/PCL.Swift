@@ -15,6 +15,7 @@ public class ResourceLoadService {
     private let validPathExtensions = ["zip", "jar", "disabled"]
     private let parsers: [ResourceParser.Type] = [
         ModParser.self,
+        DatapackParser.self,
         ResourcepackParser.self,
         ShaderParser.self
     ]
@@ -178,8 +179,13 @@ public class ResourceLoadService {
         var fileType: ResourceType?
         var parseResult: ResourceParseResult?
         
+        // 数据包与资源包靠同一个 pack.mcmeta 识别，只有"明确在找数据包"时
+        // 才让 DatapackParser 参与：否则实例的 resourcepacks 目录里
+        // 每个资源包都会被认成数据包。
         let preferredParsers = parsers.filter { $0.type == preferredType }
-        let otherParsers = parsers.filter { $0.type != preferredType }
+        let otherParsers = parsers.filter {
+            $0.type != preferredType && !($0.type == .datapack && preferredType != .datapack)
+        }
         for parser in preferredParsers + otherParsers {
             if parser.canHandle(fileURL: url, archive: archive),
                let result = parser.parse(fileURL: url, archive: archive, remoteInfo: remoteInfo) {

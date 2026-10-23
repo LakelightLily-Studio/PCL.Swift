@@ -184,6 +184,31 @@ public enum MinecraftInstallTask {
         }
     }
     
+    /// 创建一个"补全已有实例"的任务。
+    ///
+    /// 与 create 的区别：create 是从零安装（会重新下载清单、写 .incomplete、
+    /// 最后新建实例）；这里只对已存在的实例做校验与补齐，绝不删除用户目录，
+    /// 也不覆盖清单。
+    public static func createRepair(
+        instance: MinecraftInstance,
+        repository: MinecraftRepository
+    ) -> MyTask<Model> {
+        let model: Model = .init(name: instance.name, version: instance.version, repository: repository)
+        model.manifest = instance.manifest
+        return .init(
+            name: "\(instance.title) 补全文件",
+            model: model,
+            .init(0, "补全实例资源文件") { task, model in
+                try await completeResources(
+                    runningDirectory: instance.url,
+                    manifest: instance.manifest,
+                    repository: repository,
+                    progressHandler: task.setProgress(_:)
+                )
+            }
+        )
+    }
+
     /// 补全实例资源文件。
     /// - Parameters:
     ///   - repository: 实例所在的 `MinecraftRepository`。

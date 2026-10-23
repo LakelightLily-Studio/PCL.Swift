@@ -65,6 +65,15 @@ public class ResourceCache {
         return globalHash
     }
     
+    /// 释放内存中的图标数据。
+    ///
+    /// 图标是解码后的位图，几百个 Mod 加起来能占几十 MB。磁盘上的缓存文件
+    /// 保留不动，下次需要时按需重新读，所以这一步只是"腾地方"，不丢数据。
+    public func releaseIcons() {
+        URLCache.shared.removeAllCachedResponses()
+        log("已释放资源图标内存缓存")
+    }
+
     public func save() throws {
         try FileManager.default.createDirectory(at: cacheFileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try JSONEncoder.shared.encode(cacheMap)

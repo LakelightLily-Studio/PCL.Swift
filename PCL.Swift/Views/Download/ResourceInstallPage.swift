@@ -93,7 +93,23 @@ struct ResourceInstallPage: View {
             .yes(type: .highlight)
         ) == 1 {
             do {
-                let task = try await viewModel.createInstallTask(forVersion: version, to: instance)
+                // 数据包按存档生效，必须先选存档。
+                var saveName: String?
+                if viewModel.project.type == .datapack {
+                    let saves: [String] = ResourceInstallViewModel.saves(of: instance)
+                    guard !saves.isEmpty else {
+                        hint("这个实例还没有任何存档，请先进入游戏创建一个世界！", type: .critical)
+                        return
+                    }
+                    guard let index = await MessageBoxManager.shared.showListAsync(
+                        title: "选择要安装到的存档",
+                        items: saves.map { .init(name: $0, description: nil) }
+                    ) else {
+                        return
+                    }
+                    saveName = saves[index]
+                }
+                let task = try await viewModel.createInstallTask(forVersion: version, to: instance, saveName: saveName)
                 TaskManager.shared.execute(task: task)
                 AppRouter.shared.append(.tasks)
             }

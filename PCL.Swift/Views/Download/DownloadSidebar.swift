@@ -9,6 +9,9 @@ import SwiftUI
 import Core
 
 struct DownloadSidebar: Sidebar {
+    /// 侧边栏宽度常量。容器需要在不构造实例的前提下取宽度。
+    static let widthConstant: CGFloat = 150
+
     @EnvironmentObject private var minecraftDownloadPageViewModel: MinecraftDownloadPageViewModel
     
     let width: CGFloat = 150
@@ -37,7 +40,8 @@ struct DownloadSidebar: Sidebar {
                 .init(.modDownload, .iconMod, "Mod"),
                 .init(.resourcepackDownload, .iconPicture, "资源包"),
                 .init(.shaderpackDownload, .iconSun, "光影包"),
-                .init(.modpackDownload, .iconBox, "整合包")
+                .init(.modpackDownload, .iconBox, "整合包"),
+                .init(.datapackDownload, .iconBlock, "数据包")
             )
             Spacer()
         }

@@ -152,7 +152,8 @@ public class FileDownloader {
         let multiplier = 1.0 / Double(total)
         await progressHandler.startCalculate()
 
-        let concurrency = maxConcurrency ?? sourceManager.recommendedConcurrency
+        // 显式传入的并发数优先级最高（资源索引用 64），其次用户设置，最后才是下载源推荐值。
+        let concurrency = maxConcurrency ?? sourceManager.userConcurrency ?? sourceManager.recommendedConcurrency
 
         try await withThrowingTaskGroup(of: Void.self) { group in
             let semaphore = AsyncSemaphore(value: concurrency)

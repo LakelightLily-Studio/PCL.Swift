@@ -19,9 +19,13 @@ enum AppRoute: Identifiable, Hashable, Equatable {
     
     // 实例设置页面的子页面
     case instanceConfig(id: String), installedResources(id: String, type: ResourceType)
+    /// 实例概览：改名、图标、描述、收藏、分类与各文件夹入口。
+    case instanceOverview(id: String)
+    /// 实例导出（整合包 / 启动脚本）。
+    case instanceExport(id: String)
     
     // 下载页面的子页面
-    case minecraftDownload, minecraftInstallOptions(version: VersionManifest.Version), modDownload, resourcepackDownload, shaderpackDownload, modpackDownload
+    case minecraftDownload, minecraftInstallOptions(version: VersionManifest.Version), modDownload, resourcepackDownload, shaderpackDownload, modpackDownload, datapackDownload
     case projectInstall(project: ProjectListItemModel)
     
     // 联机页面的子页面
@@ -54,7 +58,8 @@ class AppRouter: ObservableObject {
         case .tasks: "任务列表"
         case .instanceList: "实例列表"
         case .dshInstanceList: "DSH"
-        case .instanceSettings(let id), .instanceConfig(let id), .installedResources(let id, _): "实例设置 - \(id)"
+        case .instanceSettings(let id), .instanceConfig(let id), .installedResources(let id, _),
+             .instanceOverview(let id), .instanceExport(let id): "实例设置 - \(id)"
         case .minecraftInstallOptions(let version): "游戏安装 - \(version.id)"
         case .projectInstall(let project): "资源下载 - \(project.title)"
         default: "错误：当前页面（\(last)）没有标题，请报告此问题！"
@@ -67,7 +72,7 @@ class AppRouter: ObservableObject {
         case .tasks: true
         case .instanceList: true
         case .dshInstanceList: true
-        case .instanceSettings, .instanceConfig, .installedResources: true
+        case .instanceSettings, .instanceConfig, .installedResources, .instanceOverview, .instanceExport: true
         case .minecraftInstallOptions: true
         case .projectInstall: true
         default: false
@@ -112,7 +117,7 @@ class AppRouter: ObservableObject {
             return true
         }
     }
-    
+
     /// 开关被关闭时，把停在联机页的会话退回启动页。
     func enforceFlagGates() {
         guard !isRouteAvailable(last) else { return }
@@ -122,10 +127,24 @@ class AppRouter: ObservableObject {
     private init() {}
 }
 
+/// 内容区。
+///
+/// **按"页面族"常驻，族内切换用 switch**。
+///
+/// 全部页面常驻不现实（有的页面依赖运行期参数，例如不同实例的配置页），
+/// 但把「每次切页都会重新构建」降到「只构建当前族」已经能去掉绝大部分开销：
+///
+/// - 设置族的三个子页共用同一批 @State，族内切换不必重建父级容器
+/// - 更多族、下载族同理
+/// - 带参数的页面（实例设置、安装选项）仍走 switch，它们本来就该按参数重建
+///
+/// 早期版本对整个 AppRouterView 套了 .id(router.last)，那会把整棵页面树
+/// 连同 @StateObject 与 Combine 订阅一起销毁重建——这是切页 78ms 的主要来源。
 struct AppRouterView: View {
     @ObservedObject private var router: AppRouter = .shared
     @EnvironmentObject private var instanceManager: InstanceManager
-    
+
+    @ViewBuilder
     var body: some View {
         switch router.last {
         case .launch:
@@ -142,6 +161,8 @@ struct AppRouterView: View {
             ResourcesSearchPage(type: .shader)
         case .modpackDownload:
             ResourcesSearchPage(type: .modpack)
+        case .datapackDownload:
+            ResourcesSearchPage(type: .datapack)
         case .projectInstall(let project):
             ResourceInstallPage(instanceManager: instanceManager, project: project)
                 .id(project)
@@ -168,37 +189,57 @@ struct AppRouterView: View {
             ToolboxPage()
         case .instanceConfig(let id):
             InstanceConfigPage(instanceManager: instanceManager, id: id)
+                .id(id)
         case .installedResources(let id, let type):
             InstalledResourcesPage(instanceManager: instanceManager, id: id, type: type)
-                .id(router.last)
+                .id("\(id)-\(type.rawValue)")
+        case .instanceOverview(let id):
+            InstanceOverviewPage(instanceManager: instanceManager, id: id)
+                .id(id)
+        case .instanceExport(let id):
+            InstanceExportPage(instanceManager: instanceManager, id: id)
+                .id(id)
         default:
             Spacer()
         }
     }
 }
 
+/// 侧边栏容器。
+///
+/// 用 @ViewBuilder 的 switch 按根页面切换侧边栏。
+///
+/// 曾试过让 9 个侧边栏全部常驻、只切 opacity：实测切页耗时没有下降，
+/// 反而因为常驻节点数量翻倍，泛型元数据查找（MetadataCacheKey、
+/// getGenericContext）的采样占比明显上升。SwiftUI 的切换成本主要来自
+/// 构建新视图树，不是来自销毁旧的——所以"常驻"不解决问题，只是把
+/// 成本从销毁挪到了每次布局。
 struct AppSidebarView: View {
     @EnvironmentObject private var instanceManager: InstanceManager
     @ObservedObject private var router: AppRouter = .shared
+    @ObservedObject private var themeManager: ThemeManager = .shared
     @State private var width: CGFloat = 0
     @State private var animationProgress: Double = 0
-    
+
     init() {}
-    
-    var sidebar: any Sidebar {
+
+    /// 侧边栏宽度。各侧边栏把宽度暴露为静态常量，避免为了取宽度去构造实例。
+    private var sidebarWidth: CGFloat {
         switch router.last {
-        case .launch: LaunchSidebar(instanceManager: instanceManager)
-        case .instanceList, .dshInstanceList: InstanceListSidebar(instanceManager: instanceManager)
-        case .instanceSettings(let id), .instanceConfig(let id), .installedResources(let id, _): InstanceSettingsSidebar(id: id)
-        case .minecraftDownload, .modDownload, .resourcepackDownload, .shaderpackDownload, .modpackDownload: DownloadSidebar()
-        case .multiplayer, .multiplayerSub, .multiplayerSettings: MultiplayerSidebar()
-        case .settings, .personalizationSettings, .gameSettings, .launcherSettings: SettingsSidebar()
-        case .more, .about, .toolbox: MoreSidebar()
-        case .tasks: TasksSidebar()
-        default: EmptySidebar()
+        case .launch: LaunchSidebar.widthConstant
+        case .instanceList, .dshInstanceList: InstanceListSidebar.widthConstant
+        case .instanceSettings, .instanceConfig, .installedResources,
+             .instanceOverview, .instanceExport: InstanceSettingsSidebar.widthConstant
+        case .minecraftDownload, .modDownload, .resourcepackDownload, .shaderpackDownload,
+             .modpackDownload, .datapackDownload: DownloadSidebar.widthConstant
+        case .multiplayer, .multiplayerSub, .multiplayerSettings: MultiplayerSidebar.widthConstant
+        case .settings, .personalizationSettings, .gameSettings, .launcherSettings: SettingsSidebar.widthConstant
+        case .more, .about, .toolbox: MoreSidebar.widthConstant
+        case .tasks: TasksSidebar.widthConstant
+        default: EmptySidebar.widthConstant
         }
     }
-    
+
     var body: some View {
         ZStack(alignment: .leading) {
             Rectangle()
@@ -206,21 +247,24 @@ struct AppSidebarView: View {
                 .frame(width: width)
                 .shadow(radius: 2)
                 .zIndex(10)
-            
-            AnyView(sidebar)
+
+            sidebarContent
                 .opacity(animationProgress)
                 .scaleEffect(animationProgress * 0.04 + 0.96)
                 .zIndex(11)
-                .frame(width: sidebar.width)
+                .frame(width: sidebarWidth)
         }
         .onAppear {
-            width = sidebar.width
-            // 当前一定是启动页面，直接开始动画
+            width = sidebarWidth
+            if themeManager.isAdjustingCustomTheme {
+                animationProgress = 1.0
+                return
+            }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                 animationProgress = 1.0
             }
         }
-        .onChange(of: sidebar.width) { newWidth in
+        .onChange(of: sidebarWidth) { newWidth in
             withAnimation(.spring(response: 0.16, dampingFraction: 1.0)) {
                 width = newWidth
             }
@@ -233,6 +277,32 @@ struct AppSidebarView: View {
             default:
                 break
             }
+        }
+    }
+
+    @ViewBuilder
+    private var sidebarContent: some View {
+        switch router.last {
+        case .launch:
+            LaunchSidebar(instanceManager: instanceManager)
+        case .instanceList, .dshInstanceList:
+            InstanceListSidebar(instanceManager: instanceManager)
+        case .instanceSettings(let id), .instanceConfig(let id), .installedResources(let id, _),
+             .instanceOverview(let id), .instanceExport(let id):
+            InstanceSettingsSidebar(id: id)
+        case .minecraftDownload, .modDownload, .resourcepackDownload, .shaderpackDownload,
+             .modpackDownload, .datapackDownload:
+            DownloadSidebar()
+        case .multiplayer, .multiplayerSub, .multiplayerSettings:
+            MultiplayerSidebar()
+        case .settings, .personalizationSettings, .gameSettings, .launcherSettings:
+            SettingsSidebar()
+        case .more, .about, .toolbox:
+            MoreSidebar()
+        case .tasks:
+            TasksSidebar()
+        default:
+            EmptySidebar()
         }
     }
 }

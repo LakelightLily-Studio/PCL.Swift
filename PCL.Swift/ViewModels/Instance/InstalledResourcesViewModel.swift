@@ -16,7 +16,20 @@ class InstalledResourcesViewModel: ObservableObject {
     @Published public var currentRepositoryId: UUID
     @Published public var currentPage: Int = 0
     @Published public var pageCount: Int = 0
-    
+
+    /// 批量操作选中的资源。用文件名（url）做标识而不是 id：
+    /// 启用/禁用会改变 url，但"哪些被选中"在操作前后应当保持。
+    @Published public var selectedIds: Set<UUID> = []
+    /// 有可用更新的资源。用 url 做标识：检测与展示读的是同一时刻的路径，
+    /// 用 UUID 的话每次重建模型都会拿到新 id，筛选就永远对不上。
+    @Published public private(set) var updatableURLs: Set<URL> = []
+    /// 是否正在检测更新。
+    @Published public private(set) var checkingUpdates: Bool = false
+    /// 当前筛选条件。
+    @Published public var filter: Filter = .all {
+        didSet { updateResources() }
+    }
+
     public let type: ResourceType
     public var hasSearchKeyword: Bool { !searchKeyword.isEmpty }
     private var cancellables: Set<AnyCancellable> = []
@@ -26,9 +39,9 @@ class InstalledResourcesViewModel: ObservableObject {
     private let instance: MinecraftInstance?
     private let id: String
     private let entriesPerPage: Int = 20
-    
+
     private let service: ResourceLoadService
-    
+
     init(instanceManager: InstanceManager, id: String, type: ResourceType) {
         self.instance = instanceManager.currentRepository.instance(named: id)
         self.id = id
@@ -39,46 +52,110 @@ class InstalledResourcesViewModel: ObservableObject {
             remoteLookupService: .init(curseforgeClient: .init(apiKey: Secrets.shared.curseforgeApiKey ?? "")),
             cache: .shared
         )
-        
+
         instanceManager.$currentRepositoryId
             .receive(on: DispatchQueue.main)
             .assign(to: \.currentRepositoryId, on: self)
             .store(in: &cancellables)
     }
-    
+
+    // MARK: - 筛选
+
+    enum Filter: String, CaseIterable, CustomStringConvertible {
+        case all, enabled, disabled, updatable
+
+        var description: String {
+            switch self {
+            case .all: "全部"
+            case .enabled: "已启用"
+            case .disabled: "已禁用"
+            case .updatable: "可更新"
+            }
+        }
+    }
+
+    // MARK: - 加载
+
     func load(resetPage: Bool = true) async throws {
         guard let instance else { throw SimpleError("实例不存在。") }
-        
+
         if type == .mod && instance.modLoader == nil {
             supportMods = false
             return
         }
-        
-        let result: [(URL, Resource)] = try await service.loadResources(in: directory()!)
-            .map { ($0, $1) }
+
+        let result: [(URL, Resource)] = try await loadAllResources()
             .sorted { $0.1.name.compare($1.1.name, options: .literal) == .orderedAscending }
-        
+
         self.loadResult = result
         if resetPage {
             self.currentPage = 0
         }
         self.updateResources()
     }
-    
+
+    /// 收集该类型的所有资源文件。
+    ///
+    /// 数据包按存档分散在 saves/<存档>/datapacks/ 下，所以要多目录扫描；
+    /// 其余类型只有一个固定目录。
+    private func loadAllResources() async throws -> [(URL, Resource)] {
+        var result: [(URL, Resource)] = []
+        if type == .datapack {
+            for save in saveNames() {
+                let directory: URL = instance!.url.appending(path: "saves/\(save)/datapacks")
+                guard FileManager.default.fileExists(atPath: directory.path) else { continue }
+                let resources: [URL: Resource] = try await service.loadResources(in: directory)
+                result.append(contentsOf: resources.map { ($0.key, $0.value) })
+            }
+            return result
+        }
+        guard let directory = directory() else { throw SimpleError("实例不存在。") }
+        let resources: [URL: Resource] = try await service.loadResources(in: directory)
+        return resources.map { ($0.key, $0.value) }
+    }
+
+    /// 实例里所有存档的名字。
+    private func saveNames() -> [String] {
+        guard let instance else { return [] }
+        let savesURL: URL = instance.url.appending(path: "saves")
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: savesURL,
+            includingPropertiesForKeys: [.isDirectoryKey]
+        ) else { return [] }
+        return entries
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .map(\.lastPathComponent)
+            .sorted()
+    }
+
     func updateResources() {
         if let convertTask {
             convertTask.cancel()
             self.convertTask = nil
         }
         guard let loadResult else { return }
-        
-        let validResources: [(URL, Resource)] = loadResult.lazy
-            .filter {
-                searchKeyword.isEmpty
-                || $0.1.name.contains(searchKeyword)
-                || $0.1.description?.contains(searchKeyword) == true
+
+        let validResources: [(URL, Resource)] = loadResult.filter { [unowned self] entry in
+            let url: URL = entry.0
+            let resource: Resource = entry.1
+            let matchesKeyword: Bool = searchKeyword.isEmpty
+                || resource.name.localizedCaseInsensitiveContains(searchKeyword)
+                || (resource.description?.localizedCaseInsensitiveContains(searchKeyword) ?? false)
+                || resource.tags.contains { $0.localizedCaseInsensitiveContains(searchKeyword) }
+            guard matchesKeyword else { return false }
+            switch filter {
+            case .all: return true
+            case .enabled: return url.pathExtension != "disabled"
+            case .disabled: return url.pathExtension == "disabled"
+            case .updatable: return updatableURLs.contains(url)
             }
-        
+        }
+
+        applyFiltered(validResources)
+    }
+
+    /// 把过滤后的结果分页并转成展示模型。
+    private func applyFiltered(_ validResources: [(URL, Resource)]) {
         self.pageCount = validResources.isEmpty ? 0 : Int(ceil(Double(validResources.count) / Double(entriesPerPage)))
         if pageCount == 0 {
             self.resources = []
@@ -86,7 +163,7 @@ class InstalledResourcesViewModel: ObservableObject {
         } else {
             currentPage = min(pageCount - 1, currentPage)
         }
-        
+
         let start = currentPage * entriesPerPage
         let end = min(start + entriesPerPage, validResources.count)
         self.resources = nil
@@ -109,12 +186,36 @@ class InstalledResourcesViewModel: ObservableObject {
             }
         }
     }
-    
+
     func setSearchKeyword(_ keyword: String) {
         searchKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         updateResources()
     }
-    
+
+    // MARK: - 选中
+
+    func toggleSelection(_ resource: ResourceDisplayModel) {
+        if selectedIds.contains(resource.id) {
+            selectedIds.remove(resource.id)
+        } else {
+            selectedIds.insert(resource.id)
+        }
+    }
+
+    func selectAll() {
+        selectedIds = Set((resources ?? []).map(\.id))
+    }
+
+    func clearSelection() {
+        selectedIds.removeAll()
+    }
+
+    var selectedResources: [ResourceDisplayModel] {
+        (resources ?? []).filter { selectedIds.contains($0.id) }
+    }
+
+    // MARK: - 启用 / 禁用
+
     func toggleDisabled(_ resource: ResourceDisplayModel) throws {
         let newURL: URL
         if resource.disabled {
@@ -128,7 +229,107 @@ class InstalledResourcesViewModel: ObservableObject {
         resource.disabled.toggle()
         resource.url = newURL
     }
-    
+
+    /// 批量启用或禁用。
+    /// - Returns: 成功处理的条目数。
+    func setEnabled(_ enabled: Bool, for resources: [ResourceDisplayModel]) -> Int {
+        var succeeded: Int = 0
+        for resource in resources where resource.disabled == enabled {
+            do {
+                try toggleDisabled(resource)
+                succeeded += 1
+            } catch {
+                err("切换 \(resource.fileName) 状态失败：\(error.localizedDescription)")
+            }
+        }
+        return succeeded
+    }
+
+    // MARK: - 删除
+
+    /// 删除资源文件。只删文件本身，不碰缓存里的记录——
+    /// 缓存按内容哈希索引，文件删了自然不再命中。
+    func delete(_ resources: [ResourceDisplayModel]) -> Int {
+        var succeeded: Int = 0
+        for resource in resources {
+            do {
+                try FileManager.default.removeItem(at: resource.url)
+                log("已删除资源 \(resource.fileName)")
+                succeeded += 1
+            } catch {
+                err("删除 \(resource.fileName) 失败：\(error.localizedDescription)")
+            }
+        }
+        selectedIds.subtract(resources.map(\.id))
+        return succeeded
+    }
+
+    // MARK: - 更新检测
+
+    /// 检测可更新的资源。
+    ///
+    /// 只查 Modrinth：本地文件的 SHA-1 能直接反查出版本，
+    /// 而 CurseForge 没有"按哈希查文件"的公开接口。
+    func checkUpdates() async {
+        guard let resources, !resources.isEmpty else { return }
+        checkingUpdates = true
+        defer { checkingUpdates = false }
+
+        var hashes: [String: ResourceDisplayModel] = [:]
+        for resource in resources {
+            guard let hash = try? FileUtils.sha1(of: resource.url) else { continue }
+            hashes[hash] = resource
+        }
+        guard !hashes.isEmpty else { return }
+
+        do {
+            let versions: [String: ModrinthVersion] = try await ModrinthAPIClient.shared.versions(ofHashes: Array(hashes.keys))
+            var updatable: Set<URL> = []
+            for (hash, version) in versions {
+                guard let resource = hashes[hash] else { continue }
+                // 版本号字符串不同即提示更新：本地版本来自 jar 元数据，
+                // 与远端 versionNumber 的格式未必一致，做语义化比较只会误判。
+                if let localVersion = resource.version, localVersion != version.versionNumber {
+                    updatable.insert(resource.url)
+                }
+            }
+            updatableURLs = updatable
+            if filter == .updatable { updateResources() }
+            log("更新检测完成，\(updatable.count) 个资源可更新")
+            hint(updatable.isEmpty ? "所有资源都是最新的！" : "发现 \(updatable.count) 个可更新的资源！", type: .finish)
+        } catch {
+            err("检测资源更新失败：\(error.localizedDescription)")
+            hint("检测更新失败：\(error.localizedDescription)", type: .critical)
+        }
+    }
+
+    // MARK: - 从文件安装
+
+    func install(from url: URL, saveName: String? = nil) throws {
+        guard let instance else { throw SimpleError("实例不存在。") }
+        let directoryName: String
+        if type == .datapack {
+            guard let saveName, !saveName.isEmpty else {
+                throw SimpleError("安装数据包前必须先选择一个存档。")
+            }
+            directoryName = "saves/\(saveName)/datapacks"
+        } else {
+            guard let name = type.saveDirectory else {
+                throw SimpleError("这类资源不能直接安装到实例目录。")
+            }
+            directoryName = name
+        }
+        let destination: URL = instance.url.appending(path: "\(directoryName)/\(url.lastPathComponent)")
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            throw SimpleError("目标目录里已经有同名文件了。")
+        }
+        try FileManager.default.copyItem(at: url, to: destination)
+        log("已从文件安装 \(url.lastPathComponent)")
+    }
+
+    // MARK: - 远端信息
+
     func loadInfo(for resource: ResourceDisplayModel) async throws -> ProjectListItemModel? {
         for source in resource.sources {
             if case .modrinth(let projectId) = source {
@@ -145,15 +346,16 @@ class InstalledResourcesViewModel: ObservableObject {
         }
         return nil
     }
-    
+
     func directory() -> URL? {
         guard let instance else { return nil }
-        
-        let directoryName = type.saveDirectory ?? ""
-        let url = instance.url.appending(path: directoryName)
-        
+        // 数据包没有统一的目录可开，返回 saves/ 让用户自己进存档。
+        let directoryName: String = type == .datapack ? "saves" : (type.saveDirectory ?? "")
+        let url: URL = instance.url.appending(path: directoryName)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        
         return url
     }
+
+    /// 数据包安装时可选的存档列表。
+    var availableSaves: [String] { saveNames() }
 }
