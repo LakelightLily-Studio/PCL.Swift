@@ -150,6 +150,66 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
 - 窗口的 `contentView` 是普通 `NSView` 包着 `NSHostingView`（`sizingOptions = []`）：直接把 hosting view
   当 contentView 时，SwiftUI 的理想尺寸会顶穿窗口（向导的 ScrollView 曾把窗口撑到 1361pt）。
 
+## 启动设置的两层结构
+
+启动参数分「全局默认值」与「实例覆盖值」两层，字段一一对应：
+
+| 全局 | 实例 | 语义 |
+|---|---|---|
+| LauncherConfig.gameWindowTitle | MinecraftInstance.Config.gameWindowTitle | 实例为 nil 时跟随全局 |
+| LauncherConfig.gameWindowType / Width / Height | 同名 | 同上 |
+| LauncherConfig.launcherVisibility | launcherVisibility | 同上 |
+| LauncherConfig.processPriority | processPriority | 同上 |
+| LauncherConfig.prelaunchCommand | prelaunchCommand | 同上 |
+| LauncherConfig.gameArguments | gameArguments | 同上 |
+| LauncherConfig.jvmArguments | jvmArguments | **例外**：实例非空即完全替换，不做拼接 |
+| LauncherConfig.memoryOptimize | memoryOptimize | 同上（跟随全局） |
+
+合并规则只有一处实现：PCL.Swift/Managers/LaunchSettingsResolver.swift 的
+ResolvedLaunchSettings.resolve(instance:global:)。**不要在别处再写一遍 if-let**，
+否则会出现「界面显示跟随全局、启动却用了旧值」。
+
+LauncherVisibility.resolve(instance:) 在 Core 里，因为启动器窗口那一侧也要判断；
+它读的是 LauncherConfigDefaults——Core 不能反向引用 App 层的 LauncherConfig，
+所以由 AppDelegate.applicationWillFinishLaunching 把值灌进去。
+
+窗口参数（--width / --height / --fullscreen）由 MinecraftLauncher.applyWindowArguments
+统一接管：先剔除清单自带的那几个，再按设置补一套。清单自己就带窗口参数，
+直接追加会得到两套同名参数，实测游戏两套都不认。
+
+## 实例元数据的存放
+
+displayName / customIconURL / customDescription / isFavorite / category
+写在实例目录的 .clmetadata.json 里，与 uuid、version 同文件。
+
+- **不改文件夹名**：name 同时是目录名、清单文件名与启动参数 version_name 的来源，
+  改名要连带搬目录、改清单引用，失败会留下半截实例。所以显示名只影响界面。
+- 解码全部用 decodeIfPresent + 默认值：老版本写出的文件没有这些键，
+  不能因此让整份元数据解码失败。
+- 自定义图标会**复制**进实例目录（.clicon.png），不记住外部路径——
+  外部文件随时会被删，记住路径等于让图标在某个时刻静默消失。
+
+## 主题系统
+
+Theme 只给「基色」，其余 7 档由 ThemePaletteBuilder 按固定比例与白/黑混出。
+新增主题只需加一个 case 和 baseHex，不要手写十几档色值（一定会漂移）。
+
+- Color.colorN 全部读 ThemeManager.shared.palette，不直接读枚举。
+- 设置页要给每个候选主题画色卡，必须用 ThemeManager.palette(for:)，
+  不能读"当前主题"。
+- 自定义主题存 HSB 三值（themeHue / themeSaturation / themeBrightness），
+  视图树的重建标识是 ThemeManager.revision（含三值），
+  只拿主题名当 id 的话拖滑杆不会刷新。
+
+## 设置导入导出
+
+PCL.Swift/Services/SettingsTransferService.swift 用**白名单结构**而不是
+"编码后删键"：删键方案一旦 LauncherConfig 加了新字段，新字段就会默认被导出，
+账号凭据正是这样漏出去的。
+
+白名单里**不含** accounts / currentAccountId / hasMicrosoftAccount /
+minecraftRepositories / currentRepositoryId——前者是凭据，后者是本机路径。
+
 ## 编码约定（代码里看不出的取舍）
 
 完整版在 [CONTRIBUTING.md](CONTRIBUTING.md)，这里只列代理最容易违反的几条：

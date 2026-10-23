@@ -49,6 +49,6 @@ struct RootView: View {
             .environmentObject(instanceManager)
             .environmentObject(MinecraftDownloadPageViewModel())
             .environmentObject(MultiplayerViewModel())
-            .environmentObject(CardInteractionState(isStatic: true))
+            .environmentObject(CardInteractionState.shared)
     }
 }

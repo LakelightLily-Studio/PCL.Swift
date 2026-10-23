@@ -11,7 +11,7 @@ import Core
 struct AboutPage: View {
     var body: some View {
         CardContainer {
-            MyCard("关于", foldable: false) {
+            StaticCard("关于") {
                 VStack(spacing: 0) {
                     ProfileView(.local(.ltCatt), "龙腾猫跃", "Plain Craft Launcher 的作者！",
                                 .init("GitHub 主页", "https://github.com/LTCatt"),
@@ -36,7 +36,7 @@ struct AboutPage: View {
                 }
             }
             
-            MyCard("特别鸣谢", foldable: false) {
+            StaticCard("特别鸣谢") {
                 VStack(spacing: 0) {
                     ProfileView(.local(.pclCommunity), "PCL Community", "Plain Craft Launcher 非官方社区",
                                 .init("GitHub 主页", "https://github.com/PCL-Community"))
@@ -49,7 +49,7 @@ struct AboutPage: View {
                 }
             }
             
-            MyCard("许可与版权声明", foldable: false) {
+            StaticCard("许可与版权声明") {
                 VStack(spacing: 15) {
                     LicenseListItem(
                         "SwiftyJSON", "Copyright (c) 2017 Ruoyu Fu\nLicensed under the MIT License.",
@@ -122,7 +122,9 @@ struct AboutPage: View {
                     .scaledToFit()
                     .frame(width: 32, height: 32)
                     .clipShape(.circle)
-                    .contrast(easterEggManager.modifyColor ? -1 : 1) // 防止“千万别点”颜色反转影响到头像
+                    // 彩蛋的反色只在真正触发时才挂：.contrast(1) 看似无效果，但它仍会为每个头像
+                    // 建立一层离屏合成。关于页有 8 个头像，切页时这 8 层是 AboutPage 慢的主因。
+                    .modifier(AvatarContrast(inverted: easterEggManager.modifyColor))
                     VStack(alignment: .leading, spacing: 2) {
                         MyText(nickname)
                         MyText(description, color: .colorGray3)
@@ -195,6 +197,19 @@ struct AboutPage: View {
                 }
                 Spacer(minLength: 0)
             }
+        }
+    }
+}
+
+/// 头像的反色效果，仅在彩蛋触发时挂载。
+private struct AvatarContrast: ViewModifier {
+    let inverted: Bool
+
+    func body(content: Content) -> some View {
+        if inverted {
+            content.contrast(-1)
+        } else {
+            content
         }
     }
 }

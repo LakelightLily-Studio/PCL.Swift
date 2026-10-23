@@ -100,7 +100,10 @@ private struct RouteView: View {
         .background(hovered ? Color.color2.opacity(0.1) : .clear)
         .foregroundStyle(selected ? Color.color3 : .color1)
         .contentShape(Rectangle())
-        .onHover { hovered = $0 }
+        .onHover { isHovered in
+            guard hovered != isHovered else { return }
+            hovered = isHovered
+        }
         .animation(.easeInOut(duration: 0.2), value: hovered)
         .animation(.spring(response: 0.2), value: selected)
         .onChange(of: router.last) { newValue in

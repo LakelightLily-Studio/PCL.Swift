@@ -1,2 +1,15 @@
 #include "Base.xcconfig"
 DEBUG_MODE = YES
+
+// Debug 也开优化。
+//
+// 默认的 -Onone 下，SwiftUI 每次 body 求值都要走未内联的泛型派发、
+// 每个 ViewBuilder 分支都是一次真实函数调用。实测在 -Onone 下滚动
+// 掉帧明显，而同一份代码在 Release 下顺滑——这不是代码写得慢，
+// 是编译器没优化。
+//
+// -O + incremental 的组合仍保留断点与变量查看（个别内联掉的局部变量
+// 可能显示 <optimized out>，但不影响正常调试）。
+// 需要逐行单步时，临时把这里改回 -Onone 即可。
+SWIFT_OPTIMIZATION_LEVEL = -O
+SWIFT_COMPILATION_MODE = incremental

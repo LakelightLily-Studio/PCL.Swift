@@ -15,3 +15,8 @@ build.xcarchive
 *.bak
 *.orig
 *.swift.save
+
+# 本地 profile / 性能分析产物（xctrace 录制、LLVM profile）
+*.profraw
+*.trace/
+*.xcresult

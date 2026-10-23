@@ -50,6 +50,9 @@ struct MyButton: View {
                 .brightness(hovered ? 0.2 : 0)
             VStack(spacing: 4) {
                 MyText(label, color: color)
+                    // 左右各留 10pt：短按钮（"更改"这类）在固定宽度里文字会顶到描边上，
+                    // 加上留白后视觉边距才和长按钮一致。
+                    .padding(.horizontal, 10)
                     .padding(textPadding)
                 if let subLabel {
                     MyText(subLabel, size: 12, color: .colorGray3)

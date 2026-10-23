@@ -69,15 +69,20 @@ struct MyListItem<Content: View>: View {
                     .allowsHitTesting(false)
             }
             .onHover { hovered in
-                withAnimation(.spring(response: 0.2)) {
-                    self.hovered = hovered
-                    if hovered {
-                        backgroundScale = 1
-                    } else {
-                        backgroundScale = 0.92
-                    }
-                }
+                // 只在状态真的变化时才动，且不套 withAnimation：
+                //
+                // onHover 在滚动时会被连续触发（鼠标不动、条目从指针下滚过），
+                // 每次进入都启动一个 spring 动画；列表越长、滚动越快，
+                // 同时跑的动画越多。这是"带滑动的地方都掉帧"的直接原因。
+                //
+                // 背景色本身用 .animation(_:value:) 声明式地过渡就够了，
+                // 不需要命令式 withAnimation——它还会把整个列表的布局
+                // 也卷进动画事务里。
+                guard self.hovered != hovered else { return }
+                self.hovered = hovered
+                backgroundScale = hovered ? 1 : 0.92
             }
+            .animation(.spring(response: 0.2), value: hovered)
     }
 }
 

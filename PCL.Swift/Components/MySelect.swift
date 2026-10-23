@@ -11,8 +11,15 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
     @State private var hovered: Bool = false
     @State private var presented: Bool = false
     @State private var panel: SelectPanel?
-    @State private var rect: NSRect = .zero
+    /// 控件在窗口内的位置。只在布局真正变化时更新，且只做一次结构体赋值——
+    /// 早先这里每次变化都调 close() + 查 NSApplication.windows，卡片入场动画
+    /// 期间每帧都会触发，是设置页卡顿的主要来源。
+    @State private var globalFrame: CGRect = .zero
+    @State private var height: CGFloat = 26
     @State private var observer: NSObjectProtocol?
+    /// 控件所在的窗口。由 GeometryReader 的 background 里取，避免
+    /// NSApplication.windows.first 在多窗口时拿错。
+    @State private var hostWindow: NSWindow?
     
     @Binding private var selected: Entry
     
@@ -27,13 +34,24 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
         ZStack(alignment: .leading) {
             GeometryReader { proxy in
                 Color.clear
-                    .onAppear {
-                        recalculateRect(proxy: proxy)
+                    .background {
+                        WindowAccessor { window in
+                            // 必须判重：updateNSView 每次布局都会回调，
+                            // 无条件写 @State 会让"布局 → 写状态 → 再布局"无限循环。
+                            // 这是设置页/实例设置页卡顿的主因。
+                            if hostWindow !== window {
+                                hostWindow = window
+                            }
+                        }
                     }
-                    .onChange(of: proxy.frame(in: .global)) { _ in
-                        close()
-                        presented = false
-                        recalculateRect(proxy: proxy)
+                    .onAppear {
+                        globalFrame = proxy.frame(in: .global)
+                        height = proxy.size.height
+                    }
+                    .onChange(of: proxy.frame(in: .global)) { newFrame in
+                        // 只记录，不查窗口、不关弹窗：真正的 rect 在打开时才算。
+                        globalFrame = newFrame
+                        height = proxy.size.height
                     }
             }
             
@@ -75,7 +93,7 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
                 })
                 
                 let panel = SelectPanel(
-                    contentRect: rect,
+                    contentRect: popupRect(),
                     styleMask: [],
                     backing: .buffered,
                     defer: false
@@ -120,20 +138,20 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
         panel = nil
     }
     
-    private func recalculateRect(proxy: GeometryProxy) {
-        guard let window = NSApplication.shared.windows.first,
-              let contentView = window.contentView else { return }
-        
-        let global = proxy.frame(in: .global)
-        let contentHeight = contentView.bounds.height
-        let popupHeight = proxy.size.height * min(CGFloat(entries.count), 5.5)
+    /// 计算弹出面板的屏幕坐标。只在打开时调用一次。
+    private func popupRect() -> NSRect {
+        guard let window = hostWindow ?? NSApplication.shared.windows.first,
+              let contentView = window.contentView else { return .zero }
+
+        let contentHeight: CGFloat = contentView.bounds.height
+        let popupHeight: CGFloat = height * min(CGFloat(entries.count), 5.5)
         let rectInWindow = NSRect(
-            x: global.minX,
-            y: contentHeight - (global.minY - 1) - proxy.size.height - popupHeight,
-            width: global.width,
+            x: globalFrame.minX,
+            y: contentHeight - (globalFrame.minY - 1) - height - popupHeight,
+            width: globalFrame.width,
             height: popupHeight
         )
-        rect = window.convertToScreen(rectInWindow)
+        return window.convertToScreen(rectInWindow)
     }
 }
 
@@ -185,6 +203,35 @@ private struct PopupView<Entry: Hashable & CustomStringConvertible>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.2), value: hoveredEntry)
+    }
+}
+
+/// 取当前视图所在的 NSWindow。
+///
+/// SwiftUI 没有直接暴露窗口的 API，标准做法是在 background 里塞一个
+/// 只做转发的 NSViewRepresentable。
+private struct WindowAccessor: NSViewRepresentable {
+    let onWindow: (NSWindow?) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view: NSView = .init()
+        DispatchQueue.main.async { onWindow(view.window) }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // 只在窗口真的换了才回调。原来的实现每次布局都异步回调一次，
+        // 而上层收到回调会写 @State，进而触发下一次布局——形成循环。
+        let current: NSWindow? = nsView.window
+        guard current !== context.coordinator.lastWindow else { return }
+        context.coordinator.lastWindow = current
+        onWindow(current)
+    }
+
+    func makeCoordinator() -> Coordinator { .init() }
+
+    final class Coordinator {
+        var lastWindow: NSWindow?
     }
 }
 
