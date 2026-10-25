@@ -13,6 +13,11 @@ on:
         required: false
         type: boolean
         default: true
+      sign_app:
+        description: Sign with Developer ID (needs MACOS_* secrets)
+        required: false
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       build_configuration:
@@ -20,6 +25,10 @@ on:
         type: string
         default: Release
       upload_artifact:
+        required: false
+        type: boolean
+        default: true
+      sign_app:
         required: false
         type: boolean
         default: true
@@ -63,7 +72,9 @@ jobs:
           fi
 
       - name: Import codesign cert
-        if: ${{ inputs.build_configuration == 'Release' }}
+        # 只在「Release 且确实要签名」时导入：sign_app=false 走 ad-hoc 签名，
+        # 没有 MACOS_* secret 也能产出可运行的包。
+        if: ${{ inputs.build_configuration == 'Release' && inputs.sign_app }}
         uses: apple-actions/import-codesign-certs@v7
         with:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
@@ -98,13 +109,21 @@ jobs:
             "${TOOLCHAIN_ARGS[@]+"${TOOLCHAIN_ARGS[@]}"}"
           )
 
-          if [ "${{ inputs.build_configuration }}" = "Release" ]; then
+          echo "Xcode: $(xcodebuild -version | tr '\n' ' ')"
+          if [ "${{ inputs.build_configuration }}" = "Release" ] && [ "${{ inputs.sign_app }}" = "true" ]; then
             xcodebuild archive \
               "${COMMON_ARGS[@]}" \
               CODE_SIGN_STYLE=Manual \
               CODE_SIGN_IDENTITY="${{ secrets.MACOS_SIGNING_IDENTITY }}" \
               DEVELOPMENT_TEAM="${{ secrets.MACOS_SIGNING_TEAM }}" \
               ENABLE_HARDENED_RUNTIME=YES
+          elif [ "${{ inputs.build_configuration }}" = "Release" ]; then
+            # 没有证书时的 Release：ad-hoc 签名（Sign to Run Locally）。
+            # 仍用 Release 配置与 CI 的 Xcode 26：图标要靠它的 actool 编译 .icon。
+            xcodebuild archive \
+              "${COMMON_ARGS[@]}" \
+              CODE_SIGN_STYLE=Manual \
+              CODE_SIGN_IDENTITY="-"
           else
             xcodebuild archive \
               "${COMMON_ARGS[@]}"
