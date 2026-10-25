@@ -8,12 +8,19 @@ permissions:
 
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        # 2.0.4 起按架构分开出包，不再打通用二进制：
+        # 通用包里总有一半代码用不上，体积也大一倍。
+        arch: [arm64, x86_64]
     uses: ./.github/workflows/build.yml
     with:
       build_configuration: Release
       upload_artifact: true
+      arch: ${{ matrix.arch }}
     secrets: inherit
-  
+
   release:
     runs-on: macos-26
     needs: build
@@ -22,56 +29,65 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      
+
       - name: Get version
         run: |
           echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
           VERSION_NUMBER=$(grep '^MARKETING_VERSION' Configs/Base.xcconfig | cut -d '=' -f2 | xargs)
           echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
           echo "TAG_NAME=v$VERSION_NUMBER" >> $GITHUB_ENV
-      
-      - name: Download artifact
+
+      - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
-          name: PCL.Swift-artifact.zip
+          pattern: PCL.Swift-artifact-*.zip
           path: ./artifact
-          skip-decompress: true
-      
-      - name: Notarize app
-        run: |
-          ditto -x -k ./artifact/PCL.Swift-artifact.zip ./artifact
-          
-          ditto -c -k --sequesterRsrc --keepParent ./artifact/PCL.Swift.app ./PCL.Swift.zip
-          xcrun notarytool submit "./PCL.Swift.zip" \
-            --apple-id "${{ secrets.MACOS_NOTARY_APPLE_ID }}" \
-            --password "${{ secrets.MACOS_NOTARY_PASSWORD }}" \
-            --team-id "${{ secrets.MACOS_SIGNING_TEAM }}" \
-            --wait
-          xcrun stapler staple "./artifact/PCL.Swift.app"
-      
-      - name: Create DMG
-        run: |
-          mkdir dmg_temp
+          merge-multiple: true
 
-          ditto ./artifact/PCL.Swift.app dmg_temp/PCL.Swift.app
-          ditto Packaging/DS_Store dmg_temp/.DS_Store
-          ln -s /Applications "dmg_temp/将左边的 App 拖至此处"
-          mkdir -p dmg_temp/.background
-          cp Packaging/background.png dmg_temp/.background/background.png
-
-          hdiutil create -volname "PCL.Swift" -srcfolder "dmg_temp" -ov -format UDZO "PCL.Swift-${{ env.TAG_NAME }}.dmg"
-      
-      - name: Process artifact
+      - name: Notarize and package each architecture
         run: |
-          ditto -c -k --sequesterRsrc --keepParent ./artifact/PCL.Swift.app "./PCL.Swift-${{ env.TAG_NAME }}.zip"
-          ditto -c -k --sequesterRsrc --keepParent ./artifact/build.xcarchive ./build.xcarchive.zip
-      
+          set -euo pipefail
+          # 解压必须用 ditto：它保留框架里的 Versions/Current 符号链接，
+          # 用普通 unzip 会把链接解成普通文件，签名当场作废。
+          for arch in arm64 x86_64; do
+            echo "::group::$arch"
+            work="work-$arch"
+            rm -rf "$work"
+            ditto -x -k "./artifact/PCL.Swift-artifact-$arch.zip" "$work"
+            app="$work/PCL.Swift.app"
+            echo "arch in bundle: $(lipo -archs "$app/Contents/MacOS/PCL.Swift")"
+
+            # 先压一份提交公证；公证通过后 staple，再重新压最终资产。
+            ditto -c -k --sequesterRsrc --keepParent "$app" "PCL.Swift-$VERSION_NUMBER-$arch.zip"
+            xcrun notarytool submit "PCL.Swift-$VERSION_NUMBER-$arch.zip" \
+              --apple-id "${{ secrets.MACOS_NOTARY_APPLE_ID }}" \
+              --password "${{ secrets.MACOS_NOTARY_PASSWORD }}" \
+              --team-id "${{ secrets.MACOS_SIGNING_TEAM }}" \
+              --wait
+            xcrun stapler staple "$app"
+            rm -f "PCL.Swift-$VERSION_NUMBER-$arch.zip"
+            ditto -c -k --sequesterRsrc --keepParent "$app" "PCL.Swift-$VERSION_NUMBER-$arch.zip"
+
+            rm -rf "dmg-$arch" && mkdir "dmg-$arch"
+            ditto "$app" "dmg-$arch/PCL.Swift.app"
+            ditto Packaging/DS_Store "dmg-$arch/.DS_Store"
+            ln -s /Applications "dmg-$arch/将左边的 App 拖至此处"
+            mkdir -p "dmg-$arch/.background"
+            cp Packaging/background.png "dmg-$arch/.background/background.png"
+            hdiutil create -volname "PCL.Swift" -srcfolder "dmg-$arch" -ov -format UDZO \
+              "PCL.Swift-$VERSION_NUMBER-$arch.dmg"
+            echo "::endgroup::"
+          done
+
       - name: Create release
         run: |
+          # x86_64 先传：2.0.3 及更早的更新器不区分架构、只取第一个 zip，
+          # Intel 包在 Apple Silicon 上还能靠 Rosetta 跑，反过来不行。
           gh release create $TAG_NAME \
-            "PCL.Swift-${{ env.TAG_NAME }}.dmg" \
-            "PCL.Swift-${{ env.TAG_NAME }}.zip" \
-            "build.xcarchive.zip" \
+            "PCL.Swift-$VERSION_NUMBER-x86_64.zip" \
+            "PCL.Swift-$VERSION_NUMBER-x86_64.dmg" \
+            "PCL.Swift-$VERSION_NUMBER-arm64.zip" \
+            "PCL.Swift-$VERSION_NUMBER-arm64.dmg" \
             --title $VERSION_NUMBER \
             --generate-notes \
             --draft

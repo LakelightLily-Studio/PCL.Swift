@@ -13,6 +13,11 @@ on:
         required: false
         type: boolean
         default: true
+      arch:
+        description: Target architecture (arm64 / x86_64)
+        required: false
+        type: string
+        default: arm64
       sign_app:
         description: Sign with Developer ID (needs MACOS_* secrets)
         required: false
@@ -28,6 +33,10 @@ on:
         required: false
         type: boolean
         default: true
+      arch:
+        required: false
+        type: string
+        default: arm64
       sign_app:
         required: false
         type: boolean
@@ -105,6 +114,8 @@ jobs:
             -scheme PCL.Swift
             -configuration "${{ inputs.build_configuration }}"
             CURRENT_PROJECT_VERSION=$BUILD_NUMBER
+            ARCHS=${{ inputs.arch }}
+            ONLY_ACTIVE_ARCH=NO
             -archivePath build
             "${TOOLCHAIN_ARGS[@]+"${TOOLCHAIN_ARGS[@]}"}"
           )
@@ -131,15 +142,18 @@ jobs:
 
       - name: Prepare app artifact
         run: |
-          mkdir "PCL.Swift-artifact"
-          ditto ./build.xcarchive/Products/Applications/PCL.Swift.app ./PCL.Swift-artifact/PCL.Swift.app
-          ditto ./build.xcarchive ./PCL.Swift-artifact/build.xcarchive
-          ditto -c -k --sequesterRsrc ./PCL.Swift-artifact ./PCL.Swift-artifact.zip
+          # 按架构出包：产物名带上架构，避免两个 job 的资产互相覆盖。
+          # ditto 打包会保留框架里的 Versions/Current 符号链接，别换成 zip 工具。
+          mkdir "PCL.Swift-artifact-${{ inputs.arch }}"
+          ditto ./build.xcarchive/Products/Applications/PCL.Swift.app "./PCL.Swift-artifact-${{ inputs.arch }}/PCL.Swift.app"
+          ditto ./build.xcarchive "PCL.Swift-artifact-${{ inputs.arch }}/build.xcarchive"
+          echo "arch in bundle: $(lipo -archs "./PCL.Swift-artifact-${{ inputs.arch }}/PCL.Swift.app/Contents/MacOS/PCL.Swift")"
+          ditto -c -k --sequesterRsrc "PCL.Swift-artifact-${{ inputs.arch }}" "PCL.Swift-artifact-${{ inputs.arch }}.zip"
 
       - name: Upload app artifact
         if: ${{ inputs.upload_artifact }}
         uses: actions/upload-artifact@v7
         with:
-          name: PCL.Swift-artifact
-          path: ./PCL.Swift-artifact.zip
+          name: PCL.Swift-artifact-${{ inputs.arch }}.zip
+          path: ./PCL.Swift-artifact-${{ inputs.arch }}.zip
           archive: false
