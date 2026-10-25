@@ -339,6 +339,19 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
 - 用户数据落在 `~/Library/Application Support/PCL.Swift/`（`config.json`、`Logs`、`Caches`、`Temp`），
   路径常量在 `PCL.Swift.Core/Utils/URLConstants.swift`，不要散落硬编码。
 
+## 启动器更新渠道
+
+- 检查更新读的是**本源仓库的 GitHub Release**（`functy23/PCL.Swift`），不再读 Cylorine Studio 的
+  `update.json`：那份元数据不跟随本仓库发版，等于永远检查不到新版本。实现在
+  `PCL.Swift/Managers/UpdateManager.swift`，DTO 在 Core 的 `GitHubRelease`。
+- 只认**已发布且非预发布**的 Release：草稿与 prerelease 不推给普通用户（未登录时草稿本来也不返回）。
+- 版本比较用营销版本（tag 去掉 `v`），唯一实现在 Core 的 `LauncherVersion`。**不要**拿 `CFBundleVersion` 比——
+  GitHub 没有构建号，那个值在 CI 里是提交数，两边量纲不同。
+- 更新包必须是 Release 资产里的 **`PCL.Swift-<版本>.zip`**：发布页还有 dmg 与 `build.xcarchive.zip`，
+  更新器按「前缀 + .zip」筛，资产改名会让更新被静默跳过。
+- 更新包解开后要能找到 `PCL.Swift.app`（兼容旧的 `PCL.Mac.app`），缺失时报「更新包格式错误」。
+- GitHub API 未登录限流 60 次/小时/IP，一次检查只发 1 个请求；不要在启动流程里重复轮询。
+
 ## 提交与 PR
 
 - 提交信息用 Conventional Commits，scope 取模块名：`fix(core): ...`、`refactor(ui): ...`、`ci: ...`、
