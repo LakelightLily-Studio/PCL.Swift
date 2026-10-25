@@ -164,6 +164,7 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
 | LauncherConfig.jvmArguments | jvmArguments | **例外**：实例非空即完全替换，不做拼接 |
 | LauncherConfig.memoryMode / memory | memoryMode / jvmHeapSize | 实例 memoryMode 为 nil 跟随全局；automatic 按 Mod 量现算；custom 用 jvmHeapSize |
 | LauncherConfig.garbageCollector | —— | 只有全局设置，实例不覆盖 |
+| LauncherConfig.preferredJavaURL | javaURL | 实例选过 Java 就以实例为准，否则用全局默认；都没有时由 JavaSearcher 自动挑 |
 
 合并规则只有一处实现：PCL.Swift/Managers/LaunchSettingsResolver.swift 的
 ResolvedLaunchSettings.resolve(instance:global:)。**不要在别处再写一遍 if-let**，
@@ -172,6 +173,10 @@ ResolvedLaunchSettings.resolve(instance:global:)。**不要在别处再写一遍
 实例设置页**没有「保存设置」按钮**：绑定改动即生效，落盘由
 InstanceConfigViewModel.scheduleAutoSave() 做 0.4s 防抖（拖滑杆、连续输入都是高频事件）。
 新增可写字段时给 @Published 属性加 `didSet { scheduleAutoSave() }`，否则界面改了、重启就丢。
+
+全局默认 Java 经 LauncherConfigDefaults 传给 Core（Core 读不到 App 层的 LauncherConfig）：
+AppDelegate 启动时灌一次值，设置页改动时同时写 LauncherConfig 与那份副本，两处缺一不可。
+启动时的解析顺序写在 MinecraftLaunchTask.checkJava：实例 javaURL → LauncherConfigDefaults.preferredJavaURL → JavaSearcher.pick。
 
 进程优先级的实现分两步，缺一不可（MinecraftLauncher）：
 
@@ -329,15 +334,27 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
   CI 在构建前按 secrets 重写该文件；本地可用环境变量 `PCLMAC_<KEY>` 覆盖（见 `PCL.Swift/App/Secrets.swift`）。
 - 本地开发更省事的做法是 `Resources/Secrets.local.properties`（写同名键即可，已在 `.gitignore` 里），
   它覆盖打包文件里的同键，模板保持干净。优先级：环境变量 → local 文件 → Secrets.properties。
-- **CurseForge API Key 有三层**：用户在 设置 → 其他 → 社区资源 手填的（存在 `config.json`，不在设置导出白名单里）
-  → 内置 Key（上面两条）。解析只有一处实现：Core 的 `CurseforgeAPIKeyResolver`。
-  没有可用 Key 时 `Secrets.shared.curseforgeClient` 返回 `nil`，**不要**用 `?? ""` 造空 Key 客户端——
-  那样请求只会 401，报错还看不出原因（Issue #4）。改完 Key 记得同步 `DownloadSourceManager.updateCurseforgeAPIKey`，
-  下载请求头读的是它那里的副本。
+- **CurseForge API Key 只有内置一层**：环境变量 / Secrets.local.properties / CI 注入的 Secrets.properties。
+  用户侧不再提供手填入口（曾经的「自定义 Key」已删除），缺 Key 只能换一份带 Key 的构建。
+  解析只有一处实现：Core 的 `CurseforgeAPIKeyResolver`（去空白、剥引号）。
+  没有可用 Key 时 `Secrets.shared.curseforgeClient` 返回 `nil`，**不要**用空字符串造客户端——
+  那样请求只会 401，报错还看不出原因（Issue #4）。
 - `PropertiesLoader` 把 `KEY=`（值为空）当作合法的空值，不要改回"整行非法"：CI 没拿到 secret 时就会写出
   这种行，一行坏掉会让整份 Secrets 作废。
 - 用户数据落在 `~/Library/Application Support/PCL.Swift/`（`config.json`、`Logs`、`Caches`、`Temp`），
   路径常量在 `PCL.Swift.Core/Utils/URLConstants.swift`，不要散落硬编码。
+
+## 主页与社区资源命名
+
+- **主页默认是空白**：原来的「启动器主页」（账号皮肤 / 更新公告 / Minecraft 新闻整页）已删除。
+  HomepageType 只剩 empty / preset / local / remote / demo，默认 `.empty`；旧配置里的 dashboard
+  解码失败后自动落到 `.empty`，不需要额外迁移代码。想要回那块主页就得重写视图并加回 case。
+- **文件名格式**：模板渲染只有 Core 的 ResourceFileName 一处实现（设置 → 其他 → 社区资源），
+  下载落点（ResourceInstallViewModel）只调用它，不要各自拼字符串。
+  占位符是 {name} / {version} / {loader} / {type}；没有译名数据源，{name} 就是资源原名，
+  渲染不出内容时回退原始文件名。
+- **Mod 管理样式**：ResourceTitleStyle 决定实例资源列表的标题显示名称还是文件名，
+  另一项降级成标题右侧的灰字（InstalledResourcesPage.ResourceListItem）。
 
 ## 启动器更新渠道
 
