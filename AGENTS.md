@@ -156,18 +156,54 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
 
 | 全局 | 实例 | 语义 |
 |---|---|---|
-| LauncherConfig.gameWindowTitle | MinecraftInstance.Config.gameWindowTitle | 实例为 nil 时跟随全局 |
-| LauncherConfig.gameWindowType / Width / Height | 同名 | 同上 |
+| LauncherConfig.gameWindowType / Width / Height | 同名 | 实例为 nil 时跟随全局 |
 | LauncherConfig.launcherVisibility | launcherVisibility | 同上 |
 | LauncherConfig.processPriority | processPriority | 同上 |
 | LauncherConfig.prelaunchCommand | prelaunchCommand | 同上 |
 | LauncherConfig.gameArguments | gameArguments | 同上 |
 | LauncherConfig.jvmArguments | jvmArguments | **例外**：实例非空即完全替换，不做拼接 |
-| LauncherConfig.memoryOptimize | memoryOptimize | 同上（跟随全局） |
+| LauncherConfig.memoryMode / memory | memoryMode / jvmHeapSize | 实例 memoryMode 为 nil 跟随全局；automatic 按 Mod 量现算；custom 用 jvmHeapSize |
+| LauncherConfig.garbageCollector | —— | 只有全局设置，实例不覆盖 |
 
 合并规则只有一处实现：PCL.Swift/Managers/LaunchSettingsResolver.swift 的
 ResolvedLaunchSettings.resolve(instance:global:)。**不要在别处再写一遍 if-let**，
 否则会出现「界面显示跟随全局、启动却用了旧值」。
+
+实例设置页**没有「保存设置」按钮**：绑定改动即生效，落盘由
+InstanceConfigViewModel.scheduleAutoSave() 做 0.4s 防抖（拖滑杆、连续输入都是高频事件）。
+新增可写字段时给 @Published 属性加 `didSet { scheduleAutoSave() }`，否则界面改了、重启就丢。
+
+进程优先级的实现分两步，缺一不可（MinecraftLauncher）：
+
+- `applyQualityOfService` 在 `process.run()` **之前**设 `Process.qualityOfService`
+  （高 userInteractive / 中 default / 低 utility）。这是不提权唯一能真正影响
+  内核调度的手段，而且必须在启动前设：进程跑起来后 Java 自己创建的线程按默认
+  QoS 生成，事后再改进程也没有追溯效果。
+- `applyProcessPriority` 在 `run()` 之后按 pid 调 `setpriority`（高 -5 / 低 10 /
+  中不调用）。**niceness 调负值需要 root**，普通用户一定拿 EPERM，所以「高」
+  实际靠 QoS 生效，setpriority 只是尽力而为；失败只记日志，不影响启动。
+
+原来那个「内存优化」开关已删除：它只是释放启动器自己的图标缓存，
+对游戏进程没有任何作用，留着只会误导用户。
+
+### 内存分配与垃圾回收器
+
+设置 → 启动页按 PCL2 的 PageSetupLaunch 排版（启动选项 / 内存分配 / 高级选项），
+数值与参数全部对齐原版：
+
+- 「自动配置」的推荐值来自 Core 的 `MemoryAllocation.recommendedGigabytes`（PCL2 的
+  四阶段算法），「自定义」的滑杆是 `0…49` 的分段线性映射，两者都**不要在视图里另算**。
+  实例配置里的 `memoryMode`/`jvmHeapSize` 是三态：nil 跟随全局、automatic 按该实例的
+  Mod 量现算、custom 用 `jvmHeapSize`。老配置没有 memoryMode，解码时按「有 jvmHeapSize
+  就是 custom」处理，升级不会被改写。
+- 垃圾回收器是 `GarbageCollectorMode`（rawValue 对齐 PCL2 的 LaunchAdvanceGC）。参数由
+  `GarbageCollectorArguments` 按 Java 大版本派生，派生方式参考 Swift-Craft-Launcher：
+  存枚举、启动时生成，**不要**把 GC 参数写进 `jvmArguments` 字符串再反解析。
+- `MinecraftLauncher.applyGarbageCollector` 会**先剔除**清单与自定义参数里由本启动器
+  托管的 GC 项（`-XX:+Use*GC`、G1 调参、`ZGenerational`、`UseCompactObjectHeaders`）再追加，
+  否则清单自带的 `-XX:+UseG1GC` 会按「最后一次出现生效」覆盖用户选的 ZGC。
+- 与 PCL2 的差异只有平台性的三处：离线皮肤整卡不做；Java Launch Wrapper / LWJGL Unsafe
+  Agent / 高性能显卡是 Windows 补丁；「启动前内存优化」依赖 EmptyWorkingSet，macOS 无等价物。
 
 LauncherVisibility.resolve(instance:) 在 Core 里，因为启动器窗口那一侧也要判断；
 它读的是 LauncherConfigDefaults——Core 不能反向引用 App 层的 LauncherConfig，
@@ -176,6 +212,9 @@ LauncherVisibility.resolve(instance:) 在 Core 里，因为启动器窗口那一
 窗口参数（--width / --height / --fullscreen）由 MinecraftLauncher.applyWindowArguments
 统一接管：先剔除清单自带的那几个，再按设置补一套。清单自己就带窗口参数，
 直接追加会得到两套同名参数，实测游戏两套都不认。
+
+启动前命令**总是等待执行完成**（原来那个「等待命令完成」开关已删除）：命令的典型用途是
+清理缓存、关软件，不等它结束就等于把后续步骤和它并发跑。
 
 ## 实例元数据的存放
 
@@ -195,11 +234,64 @@ Theme 只给「基色」，其余 7 档由 ThemePaletteBuilder 按固定比例�
 新增主题只需加一个 case 和 baseHex，不要手写十几档色值（一定会漂移）。
 
 - Color.colorN 全部读 ThemeManager.shared.palette，不直接读枚举。
-- 设置页要给每个候选主题画色卡，必须用 ThemeManager.palette(for:)，
-  不能读"当前主题"。
+- 设置页用下拉列表切主题（MySelect + Theme.allCases）；只有向导还在画候选色卡，
+  画色卡时必须用 ThemeManager.palette(for:)，不能读"当前主题"。
 - 自定义主题存 HSB 三值（themeHue / themeSaturation / themeBrightness），
   视图树的重建标识是 ThemeManager.revision（含三值），
   只拿主题名当 id 的话拖滑杆不会刷新。
+
+## 页面入场动画
+
+卡片（MyCard / StaticCard）的入场动画统一走 PCL.Swift/Components/PageEntrance.swift，
+它是对 PCL2 `MyPageRight.TriggerEnterAnimation` 的移植，不是"看起来差不多"的 spring：
+
+- 元素从 y = -16 起始，350ms 内滑到原位：前 250ms 用 easeOutQuad 补 5pt、
+  350ms 用 `1 - (1-t)^1.5·cos(1.5πt)`（PCL 的 AniEaseOutBack）补剩下 11pt，
+  两段叠加出末尾约 1.5pt 的过冲；同时 100ms 内 easeOutQuad 淡入。
+- SwiftUI 同一个 offset 只能挂一条动画，所以位移/透明度是在一个
+  `ViewModifier + Animatable` 里按公式逐帧算出来的，外部只驱动一条**线性**动画。
+  **不要给它换成 .spring 或 .easeOut**：缓动会被施加两次。
+- 相邻卡片的错峰来自 `.cardIndex(n)`（**25ms/步，封顶 8 步**）。新页面记得给卡片编号，
+  否则整页会同时出现（全页 index 都是 0 = 同时入场）。
+  注意 PCL2 的错峰单位是"页面级控件"（卡片 / 提示条 / 按钮各算一格，卡片内部不再遍历），
+  不是卡片内部每个文字；所以 25ms 的步长就是原值。
+- `disableCardAppearAnimation` 仍然有效：自定义主题拖滑杆会重建整棵树，
+  那种情况下不该重播入场动画。
+
+
+## 卡片折叠与悬停动画
+
+数值全部取自 PCL2（Controls/MyCard.vb、MyRadioBox.xaml.vb、MyListItem.xaml.vb），改之前先看那边的源码：
+
+- **折叠卡片的高度动画**：|Δ| ≤ 800 时 150ms 的 `1-(1-t)^5`（easeOutQuint）；更长的距离
+  PCL2 会先匀速再减速（展开 300ms@5000px/s + 400ms 减速，收缩 100ms + 150ms）。
+  SwiftUI 一个 `.animation` 只能挂一条曲线，所以**时长照 PCL2 算、曲线用起始斜率很高的
+  cubic-bezier 近似**"先匀速后减速"。参数集中在 Components/CardFold.swift。
+- **折叠箭头**：250ms easeOutQuint。
+- **卡片悬停**：阴影过渡 90ms，静止不透明度 0.07、悬停 0.4，半径 3，标题颜色同时变。
+- **顶栏页签**（PCL2 的 MyRadioButton）：悬停进入 100ms、离开 200ms。
+- **侧边栏条目**（PCL2 的 MyListItem）：悬停进入 120ms、离开 180ms。
+- 可折叠卡片的初始折叠状态在 `init` 里就位，**不要挪回 onAppear**：晚一帧会让卡片先按
+  展开布局画一次，进页面时看得到"内容弹开又收回"。
+- 卡片底色是 PCL2 的 `Color.FromArgb(245,255,255,255)`（近白），不是 `colorGray8`；
+  阴影静止用 `color1`(#343d4a) + 0.07，悬停换 `color4` + 0.4，半径 3。
+
+## 侧边栏
+
+- 不同页面的侧边栏宽度不同（140 / 150 / 220 / 285 / 300）。**只有白色底板做宽度动画**
+  （`spring(response: 0.16, dampingFraction: 1)`），容器的布局宽度（`ZStack` 的 frame）
+  一步到位：布局宽度跟着动画走的话，右侧页面会被一起拽着横移，卡片入场时看起来在漂。
+  侧边栏在 `ContentView` 的 HStack 里带 `zIndex(1)`，底板变宽时盖在页面上方而不是露缝。
+- 入场动画分两套，**不能同时挂**：
+  - 启动页 / 任务页：整块侧边栏"淡入 + 放大 0.96 → 1"（原来的那一套，
+    启动页账户面板自己还有一层 `insertTransition`）。
+  - 其它页面：`MyNavigationList` 逐条目播放 `SidebarEntrance`
+    （PCL2 `MyPageLeft` 的 25px 左移 + 两段 X 补位）。整列表共享一个 `appeared` 开关，
+    每行按 `35ms × 序号`（封顶 8 条）挂 delay。PCL2 的 30…14ms 是对"每个控件"计数的，
+    我们一条目只算一格，所以步长放大到 35ms 才看得出是逐条。
+- 切**子页面**（同一套侧边栏内部导航）不重播入场：`appeared` 是 `MyNavigationList` 的
+  `@State`，只有侧边栏重建才会重新从 false 开始；启动页/任务页的容器动画也只跟着
+  `sidebarWidth` 变化走。
 
 ## 设置导入导出
 
