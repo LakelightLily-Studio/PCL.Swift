@@ -325,7 +325,9 @@ public enum MinecraftInstallTask {
                 sha1: $0.hash
             ) }
         }
-        try await FileDownloader.shared.download(files: files, preferMirror: false, maxConcurrency: 64, progressHandler: progressHandler)
+        // 不要在这里写死并发数：显式传入的值会盖掉用户在「设置 → 启动器」里设的并发上限，
+        // 于是那个设置看起来永远不生效。交给 FileDownloader 按 用户设置 → 下载源推荐 决定。
+        try await FileDownloader.shared.download(files: files, preferMirror: false, progressHandler: progressHandler)
     }
     
     private static func downloadLibraries(

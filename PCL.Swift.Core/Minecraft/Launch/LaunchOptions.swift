@@ -26,11 +26,6 @@ public struct LaunchOptions {
 
     // MARK: - 窗口与进程
 
-    /// 游戏窗口标题。nil 表示不指定，交给游戏自己。
-    ///
-    /// 注意这不改游戏内的窗口标题（那是 options.txt 的 levelname），
-    /// 只影响窗口管理器里显示的名字，用于让启动器能认准这个进程的窗口。
-    public var windowTitle: String?
     /// 窗口模式。
     public var windowType: GameWindowType = .standard
     /// 自定义窗口宽度。
@@ -39,6 +34,15 @@ public struct LaunchOptions {
     public var windowHeight: Int = 480
     /// 游戏进程优先级。
     public var processPriority: ProcessPriority = .normal
+    /// 游戏工作目录（存档、Mod、options.txt 都落在这里）。
+    ///
+    /// nil 表示就是实例目录本身（版本隔离）。关闭隔离时指向仓库根目录，
+    /// 于是多个版本共用同一份存档与 Mod。
+    public var gameDirectory: URL?
+    /// 垃圾回收器策略。由它派生出的 JVM 参数会替换清单与自定义参数里的同类项。
+    public var garbageCollector: GarbageCollectorMode = .tunedG1
+    /// 本次启动所用 Java 的大版本号。GC 参数按它分档（ZGC 需要 15+，分代 ZGC 需要 21+）。
+    public var javaMajorVersion: Int = 8
 
     /// 附加游戏参数，追加在清单参数之后。
     public var extraGameArguments: [String] = []

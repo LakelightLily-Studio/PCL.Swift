@@ -70,8 +70,6 @@ public enum LauncherConfigDefaults {
     public static var launcherVisibility: LauncherVisibility = .keepVisible
     /// 全局默认进程优先级。
     public static var processPriority: ProcessPriority = .normal
-    /// 全局默认内存优化开关。
-    public static var memoryOptimize: Bool = false
 }
 
 /// 游戏进程优先级。

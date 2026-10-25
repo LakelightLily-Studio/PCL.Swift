@@ -101,49 +101,65 @@ public class MinecraftInstance: ObservableObject, Hashable, Identifiable, Equata
 
     /// 实例级配置。
     ///
-    /// 除 jvmHeapSize / javaURL / jvmArguments 外全部是可选的"覆盖值"：
-    /// nil 表示跟随全局设置（LauncherConfig 里的同名字段）。用三态而不是
-    /// 拷贝全局值，是因为全局改动要能传导到所有没单独设过的实例。
+    /// 字段全部是可选的"覆盖值"：nil 表示跟随全局设置（LauncherConfig 里的
+    /// 同名字段）。用三态而不是拷贝全局值，是因为全局改动要能传导到所有没单独设过的实例。
+    ///
+    /// jvmHeapSize 也走三态：设置 → 启动 →「内存分配」支持自动配置后，
+    /// 实例必须能表达"跟着全局走"。老配置文件里都有这个键，解码后仍是显式值，
+    /// 升级不会悄悄改掉任何已有实例的内存。
     public struct Config: Codable {
-        public var jvmHeapSize: UInt64
+        /// 实例独立分配的内存（MB），只在 memoryMode 为 custom 时使用。
+        public var jvmHeapSize: UInt64?
+        /// 实例的内存分配方式：nil 表示跟随全局，「自动配置」按 Mod 量现算。
+        ///
+        /// 老配置里没有这个键，但通常带着 jvmHeapSize；解码时会把它认作 custom，
+        /// 所以升级不会把用户单独设过的内存悄悄改回「跟随全局」。
+        public var memoryMode: MemoryAllocationMode?
         public var javaURL: URL?
         public var jvmArguments: [String]
 
-        public var gameWindowTitle: String?
+        /// 版本隔离。nil / true 表示隔离（独立目录）；false 表示与仓库根目录共享存档、Mod。
+        public var isolation: Bool?
+        /// 实例级垃圾回收器覆盖。nil 表示跟随全局。
+        public var garbageCollector: GarbageCollectorMode?
+
         public var gameWindowType: GameWindowType?
         public var gameWindowWidth: Int?
         public var gameWindowHeight: Int?
         public var launcherVisibility: LauncherVisibility?
         public var processPriority: ProcessPriority?
         public var prelaunchCommand: String?
-        public var prelaunchWaitForCompletion: Bool?
         public var gameArguments: [String]?
-        public var memoryOptimize: Bool?
 
-        public static let `default`: Config = .init(jvmHeapSize: 4096, javaURL: nil)
+        public static let `default`: Config = .init(jvmHeapSize: nil, javaURL: nil)
 
-        public init(jvmHeapSize: UInt64, javaURL: URL?, jvmArguments: [String] = []) {
+        public init(jvmHeapSize: UInt64? = nil, javaURL: URL?, jvmArguments: [String] = []) {
             self.jvmHeapSize = jvmHeapSize
+            self.memoryMode = jvmHeapSize == nil ? nil : .custom
             self.javaURL = javaURL
             self.jvmArguments = jvmArguments
         }
 
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            self.jvmHeapSize = try container.decode(UInt64.self, forKey: .jvmHeapSize)
+            self.jvmHeapSize = try container.decodeIfPresent(UInt64.self, forKey: .jvmHeapSize)
+            // 老配置只有 jvmHeapSize：有值就当作用户选过「自定义」，
+            // 否则会从"实例自己分配"悄悄变成"跟随全局"。
+            self.memoryMode = (try? container.decodeIfPresent(MemoryAllocationMode.self, forKey: .memoryMode))
+                ?? (self.jvmHeapSize == nil ? nil : .custom)
             self.javaURL = try container.decodeIfPresent(URL.self, forKey: .javaURL)
             self.jvmArguments = try container.decodeIfPresent([String].self, forKey: .jvmArguments) ?? []
 
-            self.gameWindowTitle = try container.decodeIfPresent(String.self, forKey: .gameWindowTitle)
+            self.isolation = try container.decodeIfPresent(Bool.self, forKey: .isolation)
+            self.garbageCollector = try? container.decodeIfPresent(GarbageCollectorMode.self, forKey: .garbageCollector)
+
             self.gameWindowType = try? container.decodeIfPresent(GameWindowType.self, forKey: .gameWindowType)
             self.gameWindowWidth = try container.decodeIfPresent(Int.self, forKey: .gameWindowWidth)
             self.gameWindowHeight = try container.decodeIfPresent(Int.self, forKey: .gameWindowHeight)
             self.launcherVisibility = try? container.decodeIfPresent(LauncherVisibility.self, forKey: .launcherVisibility)
             self.processPriority = try? container.decodeIfPresent(ProcessPriority.self, forKey: .processPriority)
             self.prelaunchCommand = try container.decodeIfPresent(String.self, forKey: .prelaunchCommand)
-            self.prelaunchWaitForCompletion = try container.decodeIfPresent(Bool.self, forKey: .prelaunchWaitForCompletion)
             self.gameArguments = try container.decodeIfPresent([String].self, forKey: .gameArguments)
-            self.memoryOptimize = try container.decodeIfPresent(Bool.self, forKey: .memoryOptimize)
         }
     }
 }
