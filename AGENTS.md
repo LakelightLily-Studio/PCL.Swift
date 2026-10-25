@@ -93,7 +93,8 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
 - `PCL.Swift/AppIcon.icon` 是 Icon Composer 格式，只有 Xcode 26 的 `actool` 会把它编译成 `AppIcon.icns`，
   并写入 `CFBundleIconFile` / `CFBundleIconName`。用 Xcode 16 打包时它只会被当成普通资源拷进
   `Contents/Resources/AppIcon.icon`，产物**没有 icns**，Finder / Dock 显示空白图标（2.0.1、2.0.2 就是这样）。
-- 所以**发版请走 CI**：`gh workflow run build.yml -f build_configuration=Release -f sign_app=false`
+- 所以**发版请走 CI**：`gh workflow run build.yml -f build_configuration=Release -f arch=arm64 -f sign_app=false`
+  （`arch` 取 `arm64` 或 `x86_64`；2.0.4 起按架构分开出包，**不再打通用二进制**，两个架构各跑一次）
   （`sign_app=false` 跳过证书导入、改用 ad-hoc 签名，不需要 `MACOS_*` secret）。
 - 取 CI 产物要用 `gh api repos/<owner>/<repo>/actions/artifacts/<id>/zip` 再 `ditto -x -k` 解压，
   **不要用 `gh run download`**：它用 Go 的 zip 解压，会把框架里的 `Versions/Current` 符号链接写成普通文件，
@@ -375,8 +376,10 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
 - 只认**已发布且非预发布**的 Release：草稿与 prerelease 不推给普通用户（未登录时草稿本来也不返回）。
 - 版本比较用营销版本（tag 去掉 `v`），唯一实现在 Core 的 `LauncherVersion`。**不要**拿 `CFBundleVersion` 比——
   GitHub 没有构建号，那个值在 CI 里是提交数，两边量纲不同。
-- 更新包必须是 Release 资产里的 **`PCL.Swift-<版本>.zip`**：发布页还有 dmg 与 `build.xcarchive.zip`，
-  更新器按「前缀 + .zip」筛，资产改名会让更新被静默跳过。
+- **更新包按架构分开**（2.0.4 起）：`PCL.Swift-<版本>-arm64.zip` / `PCL.Swift-<版本>-x86_64.zip`。
+  挑包逻辑在 Core 的 `GitHubRelease.updateArchive(for:)`：先按运行架构匹配 `-arm64` / `-x86_64`，
+  再回退到 2.0.3 及更早那种无后缀的通用包；只有另一种架构的包时返回 nil（装上也跑不起来）。
+  发布页还有 dmg，更新器按「前缀 + .zip」筛，资产改名会让更新被静默跳过。
 - 更新包解开后要能找到 `PCL.Swift.app`（兼容旧的 `PCL.Mac.app`），缺失时报「更新包格式错误」。
 - GitHub API 未登录限流 60 次/小时/IP，一次检查只发 1 个请求；不要在启动流程里重复轮询。
 
