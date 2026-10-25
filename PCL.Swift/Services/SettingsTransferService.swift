@@ -26,28 +26,24 @@ public enum SettingsTransferService {
         var versionListSourcePolicy: DownloadSourcePolicy?
         var downloadMaxThreads: Int?
         var downloadSpeedLimit: Int?
+        var autoSetGameLanguage: Bool?
         var theme: String?
         var themeHue: Double?
         var themeSaturation: Double?
         var themeBrightness: Double?
-        var backgroundOpacity: Double?
-        var backgroundBlur: Double?
-        var backgroundTinted: Bool?
-        var backgroundFills: Bool?
         var titleBarLogoType: String?
         var titleBarText: String?
-        var gameWindowTitle: String?
         var gameWindowType: String?
         var gameWindowWidth: Int?
         var gameWindowHeight: Int?
         var launcherVisibility: String?
         var processPriority: String?
         var prelaunchCommand: String?
-        var prelaunchWaitForCompletion: Bool?
         var gameArguments: String?
         var jvmArguments: String?
         var memory: UInt64?
-        var memoryOptimize: Bool?
+        var memoryMode: String?
+        var garbageCollector: Int?
         var enabledFlags: [String]?
     }
 
@@ -63,28 +59,24 @@ public enum SettingsTransferService {
             versionListSourcePolicy: config.versionListSourcePolicy,
             downloadMaxThreads: config.downloadMaxThreads,
             downloadSpeedLimit: config.downloadSpeedLimit,
+            autoSetGameLanguage: config.autoSetGameLanguage,
             theme: config.theme.rawValue,
             themeHue: config.themeHue,
             themeSaturation: config.themeSaturation,
             themeBrightness: config.themeBrightness,
-            backgroundOpacity: config.backgroundOpacity,
-            backgroundBlur: config.backgroundBlur,
-            backgroundTinted: config.backgroundTinted,
-            backgroundFills: config.backgroundFills,
             titleBarLogoType: config.titleBarLogoType.rawValue,
             titleBarText: config.titleBarText,
-            gameWindowTitle: config.gameWindowTitle,
             gameWindowType: config.gameWindowType.rawValue,
             gameWindowWidth: config.gameWindowWidth,
             gameWindowHeight: config.gameWindowHeight,
             launcherVisibility: config.launcherVisibility.rawValue,
             processPriority: config.processPriority.rawValue,
             prelaunchCommand: config.prelaunchCommand,
-            prelaunchWaitForCompletion: config.prelaunchWaitForCompletion,
             gameArguments: config.gameArguments,
             jvmArguments: config.jvmArguments,
             memory: config.memory,
-            memoryOptimize: config.memoryOptimize,
+            memoryMode: config.memoryMode.rawValue,
+            garbageCollector: config.garbageCollector.rawValue,
             enabledFlags: config.enabledFlags.map { $0.map(\.rawValue) }
         )
 
@@ -116,6 +108,7 @@ public enum SettingsTransferService {
         apply(settings.versionListSourcePolicy) { config.versionListSourcePolicy = $0 }
         apply(settings.downloadMaxThreads) { config.downloadMaxThreads = $0 }
         apply(settings.downloadSpeedLimit) { config.downloadSpeedLimit = $0 }
+        apply(settings.autoSetGameLanguage) { config.autoSetGameLanguage = $0 }
 
         // 枚举按 rawValue 还原：导入的文件可能来自旧版本或手改过，
         // 认不出的值直接跳过而不是让整次导入失败。
@@ -124,26 +117,21 @@ public enum SettingsTransferService {
         apply(settings.themeSaturation) { config.themeSaturation = $0 }
         apply(settings.themeBrightness) { config.themeBrightness = $0 }
 
-        apply(settings.backgroundOpacity) { config.backgroundOpacity = $0 }
-        apply(settings.backgroundBlur) { config.backgroundBlur = $0 }
-        apply(settings.backgroundTinted) { config.backgroundTinted = $0 }
-        apply(settings.backgroundFills) { config.backgroundFills = $0 }
 
         if let raw = settings.titleBarLogoType, let type = TitleBarLogoType(rawValue: raw) { config.titleBarLogoType = type; applied += 1 }
         apply(settings.titleBarText) { config.titleBarText = $0 }
 
-        apply(settings.gameWindowTitle) { config.gameWindowTitle = $0 }
         if let raw = settings.gameWindowType, let type = GameWindowType(rawValue: raw) { config.gameWindowType = type; applied += 1 }
         apply(settings.gameWindowWidth) { config.gameWindowWidth = $0 }
         apply(settings.gameWindowHeight) { config.gameWindowHeight = $0 }
         if let raw = settings.launcherVisibility, let value = LauncherVisibility(rawValue: raw) { config.launcherVisibility = value; applied += 1 }
         if let raw = settings.processPriority, let value = ProcessPriority(rawValue: raw) { config.processPriority = value; applied += 1 }
         apply(settings.prelaunchCommand) { config.prelaunchCommand = $0 }
-        apply(settings.prelaunchWaitForCompletion) { config.prelaunchWaitForCompletion = $0 }
         apply(settings.gameArguments) { config.gameArguments = $0 }
         apply(settings.jvmArguments) { config.jvmArguments = $0 }
         apply(settings.memory) { config.memory = $0 }
-        apply(settings.memoryOptimize) { config.memoryOptimize = $0 }
+        if let raw = settings.memoryMode, let mode = MemoryAllocationMode(rawValue: raw) { config.memoryMode = mode; applied += 1 }
+        if let raw = settings.garbageCollector, let mode = GarbageCollectorMode(rawValue: raw) { config.garbageCollector = mode; applied += 1 }
 
         if let raw = settings.enabledFlags {
             config.enabledFlags = Set(raw.compactMap { FeatureFlag(rawValue: $0) })

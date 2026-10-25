@@ -49,20 +49,17 @@ struct StaticCard<Content: View>: View {
         .frame(maxWidth: .infinity)
         .background {
             RoundedRectangle(cornerRadius: 5)
-                .fill(Color.colorGray8)
-                .shadow(color: .black.opacity(0.1), radius: 6)
+                // 与 MyCard 一致：PCL2 的卡片底色是 245 alpha 的近白。
+                .fill(Color.white.opacity(245.0 / 255.0))
+                .shadow(color: Color.color1.opacity(0.07), radius: 3)
         }
-        .offset(y: appeared ? 0 : -25)
-        .opacity(appeared ? 1 : 0)
+        .modifier(PageEntranceShape(progress: appeared ? 1 : 0, enabled: !disableCardAppearAnimation))
+        .animation(
+            disableCardAppearAnimation ? nil : PageEntrance.animation(for: index),
+            value: appeared
+        )
         .onAppear {
-            if disableCardAppearAnimation {
-                appeared = true
-                return
-            }
-            let delay: Double = Double(min(index, 3)) * 0.04
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) { appeared = true }
-            }
+            appeared = true
         }
     }
 }

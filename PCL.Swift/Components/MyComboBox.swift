@@ -55,6 +55,7 @@ struct MyComboBox: View {
         .fixedSize()
         .contentShape(.rect)
         .onHover { hovered = $0 }
+        .pointingHandCursor() 
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in

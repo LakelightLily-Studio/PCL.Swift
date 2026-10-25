@@ -68,6 +68,8 @@ struct TitleBarView: View {
     @ViewBuilder
     private var logoView: some View {
         switch LauncherConfig.shared.titleBarLogoType {
+        case .none:
+            EmptyView()
         case .logo:
             HStack(spacing: 4) {
                 // 标题栏沿用 PCL 的白色线条字标（配合右侧的 "Swift" 标签读作 PCL.Swift）；
@@ -147,8 +149,11 @@ private struct PageButton: View {
                     }
                 }
         )
-        .animation(.easeInOut(duration: 0.2), value: isRoot)
-        .animation(.easeInOut(duration: 0.2), value: hovered)
+        // 顶栏页签对齐 PCL2 的 MyRadioButton（MyRadioBox 的常量）：
+        // 鼠标进入 100ms、离开 200ms；选中态切换同样 100ms。
+        .animation(hovered ? .easeOut(duration: 0.1) : .easeOut(duration: 0.2), value: hovered)
+        .animation(.easeOut(duration: 0.1), value: isRoot)
+        .pointingHandCursor()
     }
     
     private var foregroundColor: Color {

@@ -12,8 +12,10 @@ import UniformTypeIdentifiers
 struct InstalledResourcesPage: View {
     @StateObject private var viewModel: InstalledResourcesViewModel
     @StateObject private var loadingVM: MyLoadingViewModel
+    private let instanceId: String
 
     init(instanceManager: InstanceManager, id: String, type: ResourceType) {
+        self.instanceId = id
         self._viewModel = .init(wrappedValue: .init(instanceManager: instanceManager, id: id, type: type))
         self._loadingVM = .init(wrappedValue: MyLoadingViewModel(text: "加载中"))
     }
@@ -24,6 +26,8 @@ struct InstalledResourcesPage: View {
                 unsupportedCard
             } else {
                 CardContainer {
+                    typeSelectorCard
+
                     if viewModel.type == .shader {
                         MyTip(text: "光影包需要搭配光影加载器使用。\n详细教程：https://cylorine.studio/helps/shader", theme: .blue)
                             .onTapGesture {
@@ -83,6 +87,38 @@ struct InstalledResourcesPage: View {
         .onDisappear {
             viewModel.resources = nil
         }
+    }
+
+    // MARK: - 类型切换
+
+    /// 资源类型切换。
+    ///
+    /// 原版没有「资源包 / 光影包 / 数据包」三个独立侧边栏条目，它们都在
+    /// 「Mod 管理」里按类型切；这里用一条下拉做同样的事，切换即换路由。
+    private var typeSelectorCard: some View {
+        StaticCard(padding: 12) {
+            SettingRow("资源类型", labelWidth: 80) {
+                MySelect(Binding(
+                    get: { ResourceTab(type: viewModel.type) },
+                    set: { tab in
+                        guard tab.type != viewModel.type else { return }
+                        AppRouter.shared.replaceLast(.installedResources(id: instanceId, type: tab.type))
+                    }
+                ), entries: ResourceTab.allCases)
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private struct ResourceTab: Hashable, CustomStringConvertible {
+        let type: ResourceType
+        var description: String { type.localizedName }
+        static let allCases: [ResourceTab] = [
+            .init(type: .mod),
+            .init(type: .resourcepack),
+            .init(type: .shader),
+            .init(type: .datapack)
+        ]
     }
 
     // MARK: - 工具栏

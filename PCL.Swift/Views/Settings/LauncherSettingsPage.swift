@@ -8,27 +8,44 @@
 import SwiftUI
 import Core
 
-/// 设置 → 启动器。
+/// 设置 → 其他。
 ///
-/// 原先这里是「下载 + 个性化」，「其它」页则是「调试 + 启动器更新」。
-/// 现在个性化搬去了独立页（PersonalizationSettingsPage），其余两页合并成一页：
-/// 它们描述的都是启动器自身的行为（怎么下载、导不导出日志、要不要检查更新）。
+/// 卡片与行序按 PCL2 的 PageSetupSystem 排：下载 / 社区资源 / 辅助功能 / 启动器。
+/// 按要求不做「调试选项」整卡。
+///
+/// 还没有实现的能力（CurseForge 源、文件名格式、Mod 管理样式、游戏更新提示）
+/// 保留原版的行，但控件不可交互——放活的开关只会变成点了没反应。
 struct LauncherSettingsPage: View {
     @ObservedObject private var configObserver: LauncherConfigObserver = .shared
     @State private var downloadSourcePolicy: DownloadSourcePolicy = LauncherConfig.shared.downloadSourcePolicy
     @State private var versionListSourcePolicy: DownloadSourcePolicy = LauncherConfig.shared.versionListSourcePolicy
-    @State private var maxThreads: String = LauncherConfig.shared.downloadMaxThreads.map(String.init) ?? ""
-    @State private var speedLimit: String = String(LauncherConfig.shared.downloadSpeedLimit)
+    /// 线程数与限速都走滑杆：与 PCL2 一致，取值映射见 DownloadSpeedLimit。
+    @State private var threadCount: Double = Double(
+        LauncherConfig.shared.downloadMaxThreads ?? DownloadSourceManager.shared.recommendedConcurrency
+    )
+    @State private var speedPosition: Double = Double(
+        DownloadSpeedLimit.sliderPosition(forBytesPerSecond: Int64(LauncherConfig.shared.downloadSpeedLimit) * 1024)
+    )
+    @State private var updatePrompt: UpdatePromptMode = LauncherConfig.shared.ignoreLauncherUpdates ? .off : .notify
+    @State private var autoSetGameLanguage: Bool = LauncherConfig.shared.autoSetGameLanguage
 
     var body: some View {
         CardContainer {
             downloadCard
-            configFileCard
+            communityCard
                 .cardIndex(1)
-            debugCard
+            accessibilityCard
                 .cardIndex(2)
-            updateCard
+            launcherCard
                 .cardIndex(3)
+        }
+        .onAppear {
+            // 原版这一行就是独立的版本列表源。历史配置里可能是「跟随文件下载源」，
+            // 那样界面上的下拉改了也不生效，所以进页面时一次性拆开并落盘。
+            if !LauncherConfig.shared.separatesVersionListSource {
+                LauncherConfig.shared.separatesVersionListSource = true
+                DownloadSourceManager.shared.separatesVersionList = true
+            }
         }
     }
 
@@ -37,135 +54,127 @@ struct LauncherSettingsPage: View {
     private var downloadCard: some View {
         MyCard("下载", foldable: false) {
             VStack(alignment: .leading, spacing: 10) {
-                configLine(label: "下载源") {
-                    MySelect(
-                        $downloadSourcePolicy,
-                        entries: [.officialFirst, .mirrorFirst]
-                    )
-                    .frame(width: 180)
-                }
-                .onChange(of: downloadSourcePolicy) { newValue in
-                    DownloadSourceManager.shared.policy = newValue
-                    LauncherConfig.shared.downloadSourcePolicy = newValue
+                SettingRow("文件下载源", labelWidth: 120) {
+                    MySelect($downloadSourcePolicy, entries: [.officialFirst, .mirrorFirst])
+                        .frame(maxWidth: .infinity)
+                        .onChange(of: downloadSourcePolicy) { newValue in
+                            DownloadSourceManager.shared.policy = newValue
+                            LauncherConfig.shared.downloadSourcePolicy = newValue
+                        }
                 }
 
                 SettingRow("版本列表源", labelWidth: 120) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        MyComboBox(checked: Binding(
-                            get: { LauncherConfig.shared.separatesVersionListSource },
-                            set: { enabled in
-                                LauncherConfig.shared.separatesVersionListSource = enabled
-                                DownloadSourceManager.shared.separatesVersionList = enabled
-                                configObserver.touch()
-                            }
-                        ), text: "版本列表使用单独的下载源")
-                        if LauncherConfig.shared.separatesVersionListSource {
-                            MySelect($versionListSourcePolicy, entries: [.officialFirst, .mirrorFirst])
-                                .frame(width: 180)
-                                .onChange(of: versionListSourcePolicy) { newValue in
-                                    LauncherConfig.shared.versionListSourcePolicy = newValue
-                                    DownloadSourceManager.shared.versionListSourcePolicy = newValue
-                                }
+                    MySelect($versionListSourcePolicy, entries: [.officialFirst, .mirrorFirst])
+                        .frame(maxWidth: .infinity)
+                        .onChange(of: versionListSourcePolicy) { newValue in
+                            // 原版这一行就是独立下拉；本启动器原先有个「使用单独的下载源」
+                            // 开关，选了这里就等价于把开关打开，不再保留那个开关。
+                            LauncherConfig.shared.separatesVersionListSource = true
+                            LauncherConfig.shared.versionListSourcePolicy = newValue
+                            DownloadSourceManager.shared.separatesVersionList = true
+                            DownloadSourceManager.shared.versionListSourcePolicy = newValue
                         }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                configLine(label: "最大并发数") {
-                    MyTextField(text: $maxThreads, placeholder: "留空则跟随下载源推荐值")
-                        .frame(width: 200)
-                        .onChange(of: maxThreads) { newValue in
-                            applyMaxThreads(newValue)
+                SettingRow("最大线程数", labelWidth: 120) {
+                    MySlider(
+                        value: $threadCount,
+                        range: 1...Double(DownloadSourceManager.concurrencyRange.upperBound),
+                        step: 1
+                    )
+                    .onChange(of: threadCount) { newValue in
+                        let value: Int = Int(newValue)
+                        DownloadSourceManager.shared.setUserConcurrency(value)
+                        LauncherConfig.shared.downloadMaxThreads = value
+                    }
+                    MyText("\(Int(threadCount)) 线程", size: 12, color: .colorGray3)
+                        .frame(width: 64, alignment: .trailing)
+                }
+
+                SettingRow("速度限制", labelWidth: 120) {
+                    MySlider(value: $speedPosition, range: 0...Double(DownloadSpeedLimit.maximumSliderPosition), step: 1)
+                        .onChange(of: speedPosition) { newValue in
+                            let bytes: Int64 = DownloadSpeedLimit.bytesPerSecond(forSliderPosition: Int(newValue))
+                            DownloadSourceManager.shared.speedLimit = bytes
+                            LauncherConfig.shared.downloadSpeedLimit = Int(bytes / 1024)
                         }
-                    MyButton("恢复默认") {
-                        maxThreads = ""
-                        DownloadSourceManager.shared.setUserConcurrency(nil)
-                        LauncherConfig.shared.downloadMaxThreads = nil
-                    }
-                    .frame(width: 90)
-                    MyText("当前：\(DownloadSourceManager.shared.recommendedConcurrency)", size: 12, color: .colorGray3)
+                    MyText(DownloadSpeedLimit.description(forSliderPosition: Int(speedPosition)), size: 12, color: .colorGray3)
+                        .frame(width: 76, alignment: .trailing)
                 }
 
-                configLine(label: "下载限速") {
-                    MyTextField(text: $speedLimit, placeholder: "0 表示不限速")
-                        .frame(width: 120)
-                        .onChange(of: speedLimit) { newValue in
-                            applySpeedLimit(newValue)
-                        }
-                    MyText("KB/s", size: 12, color: .colorGray3)
+                SettingRow("目标文件夹", labelWidth: 120, verticalPadding: 2) {
+                    MyText("请在 启动 → 文件夹列表 中更改下载目标文件夹；在某个文件夹上右键即可打开对应目录。", size: 12, color: .colorGray3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-
-                configLine(label: "缓存目录") {
-                    MyText(cacheDirectoryDescription, size: 12, color: .colorGray2)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    MyButton("更改") { chooseCacheDirectory() }
-                        .fixedSize(horizontal: true, vertical: false)
-                        .frame(minWidth: 80)
-                    MyButton("恢复默认") {
-                        LauncherConfig.shared.customCacheDirectory = nil
-                        configObserver.touch()
-                        hint("缓存目录已恢复默认，重启后生效！", type: .finish)
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
-                    .frame(minWidth: 100)
-                    .disabled(LauncherConfig.shared.customCacheDirectory == nil)
-                }
-
-                MyTip(text: "并发数与限速只影响后续下载，正在执行的任务不会重新分片。缓存目录的更改需要重启启动器才会生效。", theme: .blue)
             }
         }
     }
 
-    private var cacheDirectoryDescription: String {
-        LauncherConfig.shared.customCacheDirectory?.path ?? URLConstants.cacheURL.path + "（默认）"
-    }
+    // MARK: - 社区资源（占位）
 
-    private func applyMaxThreads(_ text: String) {
-        let trimmed: String = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            DownloadSourceManager.shared.setUserConcurrency(nil)
-            LauncherConfig.shared.downloadMaxThreads = nil
-            return
-        }
-        guard let value = Int(trimmed) else { return }
-        let range: ClosedRange<Int> = DownloadSourceManager.concurrencyRange
-        let clamped: Int = min(max(value, range.lowerBound), range.upperBound)
-        if clamped != value {
-            // 输入被夹紧时回写，否则界面显示的数字与实际生效值不一致。
-            maxThreads = String(clamped)
-        }
-        DownloadSourceManager.shared.setUserConcurrency(clamped)
-        LauncherConfig.shared.downloadMaxThreads = clamped
-    }
-
-    private func applySpeedLimit(_ text: String) {
-        let trimmed: String = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let value: Int = max(0, Int(trimmed) ?? 0)
-        LauncherConfig.shared.downloadSpeedLimit = value
-        DownloadSourceManager.shared.speedLimit = Int64(value) * 1024
-    }
-
-    private func chooseCacheDirectory() {
-        let panel: NSOpenPanel = .init()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.title = "选择缓存目录"
-        panel.begin { result in
-            guard result == .OK, let url = panel.url else { return }
-            LauncherConfig.shared.customCacheDirectory = url
-            configObserver.touch()
-            hint("缓存目录已更改，重启后生效！", type: .finish)
-        }
-    }
-
-    // MARK: - 配置文件
-
-    private var configFileCard: some View {
-        StaticCard("配置文件") {
+    private var communityCard: some View {
+        MyCard("社区资源", foldable: false) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 15) {
+                SettingRow("来源", labelWidth: 120) {
+                    placeholderText("尽量使用官方源")
+                }
+                SettingRow("文件名格式", labelWidth: 120) {
+                    placeholderText("[译名] create-1.21.1-6.0.4")
+                }
+                SettingRow("Mod 管理样式", labelWidth: 120) {
+                    placeholderText("标题显示译名，详情显示文件名")
+                }
+                MyTip(text: "占位：本启动器的资源下载目前只接入了 Modrinth，还没有 CurseForge 源、文件重命名与 Mod 译名，实现后这三行会换成真实控件。", theme: .yellow)
+            }
+        }
+    }
+
+    // MARK: - 辅助功能
+
+    private var accessibilityCard: some View {
+        MyCard("辅助功能", foldable: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                SettingRow("游戏更新提示", labelWidth: 120) {
+                    MyComboBox(checked: .constant(false), text: "正式版更新提示")
+                        .disabled(true)
+                        .opacity(0.5)
+                    MyComboBox(checked: .constant(false), text: "测试版更新提示")
+                        .disabled(true)
+                        .opacity(0.5)
+                }
+                SettingRow("游戏语言", labelWidth: 120) {
+                    MyComboBox(checked: $autoSetGameLanguage, text: "自动设置为中文")
+                        .onChange(of: autoSetGameLanguage) { newValue in
+                            LauncherConfig.shared.autoSetGameLanguage = newValue
+                            configObserver.touch()
+                        }
+                    Spacer(minLength: 0)
+                }
+                MyTip(text: "「自动设置为中文」只在实例还没有存档、或玩家没手动改过游戏语言时生效，不会覆盖你自己选的语言。「游戏更新提示」仍是占位：需要启动时比对版本列表，本启动器还没做。", theme: .blue)
+            }
+        }
+    }
+
+    // MARK: - 启动器
+
+    private var launcherCard: some View {
+        MyCard("启动器", foldable: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                SettingRow("启动器更新", labelWidth: 120) {
+                    MySelect($updatePrompt, entries: UpdatePromptMode.allCases)
+                        .frame(maxWidth: .infinity)
+                        .onChange(of: updatePrompt) { newValue in
+                            LauncherConfig.shared.ignoreLauncherUpdates = newValue == .off
+                            configObserver.touch()
+                        }
+                }
+
+                HStack(spacing: 20) {
+                    MyButton("检查更新") {
+                        UpdateService.shared.runInteractiveUpdateFlow(manually: true)
+                    }
+                    .frame(width: 120)
                     MyButton("导出设置") { exportSettings() }
                         .frame(width: 120)
                     MyButton("导入设置") { importSettings() }
@@ -173,7 +182,7 @@ struct LauncherSettingsPage: View {
                     Spacer()
                 }
                 .frame(height: 35)
-                MyTip(text: "导出的文件只包含外观、下载与启动默认值，不包含账号与目录信息。导入会覆盖当前这些设置，账号不受影响。", theme: .yellow)
+                .padding(.top, 4)
             }
         }
     }
@@ -228,6 +237,9 @@ struct LauncherSettingsPage: View {
                     DownloadSourceManager.shared.versionListSourcePolicy = LauncherConfig.shared.versionListSourcePolicy
                     DownloadSourceManager.shared.setUserConcurrency(LauncherConfig.shared.downloadMaxThreads)
                     DownloadSourceManager.shared.speedLimit = Int64(LauncherConfig.shared.downloadSpeedLimit) * 1024
+                    threadCount = Double(LauncherConfig.shared.downloadMaxThreads ?? DownloadSourceManager.shared.recommendedConcurrency)
+                    speedPosition = Double(DownloadSpeedLimit.sliderPosition(forBytesPerSecond: Int64(LauncherConfig.shared.downloadSpeedLimit) * 1024))
+                    autoSetGameLanguage = LauncherConfig.shared.autoSetGameLanguage
                     if let flags = LauncherConfig.shared.enabledFlags {
                         for flag in FeatureFlag.allCases {
                             FlagsManager.shared.setEnabled(flag, enabled: flags.contains(flag))
@@ -244,69 +256,25 @@ struct LauncherSettingsPage: View {
         }
     }
 
-    // MARK: - 调试
+    // MARK: - 占位
 
-    private var debugCard: some View {
-        MyCard("调试", foldable: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    MyButton("导出日志") {
-                        do {
-                            let url: URL = try SettingsViewModel.shared.exportLogs()
-                            NSWorkspace.shared.activateFileViewerSelecting([url])
-                        } catch {
-                            err("导出日志失败：\(error.localizedDescription)")
-                            hint("导出日志失败：\(error.localizedDescription)", type: .critical)
-                        }
-                    }
-                    .frame(width: 150)
-                    Spacer()
-                }
-                .frame(height: 40)
+    /// 占位行：保留原版的名称与示例值，但不可交互。
+    private func placeholderText(_ sample: String) -> some View {
+        MyText(sample, size: 12, color: .colorGray3)
+    }
 
-                Text("功能开关")
-                    .foregroundStyle(Color.color1)
-                    .font(.custom("PingFangSC-Semibold", size: 14))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+    // MARK: - 更新提示
 
-                MyTip(text: "以下开关用于控制实验性功能及未经充分验证的更改。除非你了解其影响，否则请不要更改它们！", theme: .yellow)
+    /// 「启动器更新」这一行的取值。原版有四个选项（自动下载 / 提示 / 仅重大漏洞提示 / 关闭），
+    /// 本启动器只有「提示」与「关闭」两种真实行为，所以只暴露这两项。
+    enum UpdatePromptMode: String, CaseIterable, CustomStringConvertible {
+        case notify, off
 
-                VStack(alignment: .leading) {
-                    MyComboBox(checked: binding(of: .deduplicateLibraries), text: "去除同一清单中的重复依赖库")
-                    MyComboBox(checked: binding(of: .multiplayer), text: "联机功能")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 4)
+        var description: String {
+            switch self {
+            case .notify: "在有新版本时显示提示"
+            case .off: "关闭更新提示"
             }
         }
-    }
-
-    // MARK: - 更新
-
-    private var updateCard: some View {
-        StaticCard("启动器更新") {
-            HStack {
-                MyButton("检查更新") {
-                    UpdateService.shared.runInteractiveUpdateFlow(manually: true)
-                }
-                .frame(width: 150)
-                Spacer()
-            }
-            .frame(height: 40)
-        }
-    }
-
-    // MARK: - 组件
-
-    @ViewBuilder
-    private func configLine(label: String,  @ViewBuilder body: () -> some View) -> some View {
-        SettingRow(label, labelWidth: 120, content: body)
-    }
-
-    private func binding(of flag: FeatureFlag) -> Binding<Bool> {
-        return .init(
-            get: { FlagsManager.shared.isEnabled(flag) },
-            set: { FlagsManager.shared.setEnabled(flag, enabled: $0) }
-        )
     }
 }

@@ -13,7 +13,6 @@ struct ContentView: View {
     @ObservedObject private var router: AppRouter = .shared
     @ObservedObject private var easterEggManager: EasterEggManager = .shared
     @ObservedObject private var themeManager: ThemeManager = .shared
-    @ObservedObject private var demoState: DemoState = .shared
     
     @EnvironmentObject private var instanceManager: InstanceManager
     
@@ -22,7 +21,10 @@ struct ContentView: View {
             TitleBarView()
                 .zIndex(10)
             HStack(spacing: 0) {
+                // 放在页面之上：底板做宽度动画时会短暂伸到页面区域，
+                // 画在页面上方才像"侧边栏滑过去"，而不是露出一条缝。
                 AppSidebarView()
+                    .zIndex(1)
                 AppRouterView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -30,16 +32,10 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // 消息框与提示条已上移到 RootView（向导阶段也要能弹），这里只留页面内的浮层。
         .overlay { ExtraButtonsOverlay() }
-        .background {
-            ZStack {
-                Color.colorBackground
-                BackgroundLayer()
-            }
-        }
-        // 主题色是计算属性，切换后需要重建视图树才能整体换色；
-        // demo 分支的 ⌘R 通过 replayToken 复用同一条重建路径来重播进入动画。
-        // 两个 .id() 会互相覆盖（后者胜出），所以合并成一个标识。
-        .id("\(themeManager.revision)-\(demoState.replayToken)")
+        .background(Color.colorBackground)
+        // 主题色是计算属性，切换后需要重建视图树才能整体换色。
+        // 用 revision 而不是主题名：自定义主题拖滑杆时只有 revision 会变。
+        .id(themeManager.revision)
         // 拖自定义主题滑杆时整棵树会被 .id 重建，卡片不能再播一遍入场动画。
         .disableCardAppearAnimation(themeManager.isAdjustingCustomTheme)
         // 彩蛋效果必须"按需挂载"，不能一直挂着空值：

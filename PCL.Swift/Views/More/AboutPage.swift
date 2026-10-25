@@ -35,6 +35,7 @@ struct AboutPage: View {
                                 .init("问题反馈", "https://github.com/functy23/PCL.Swift/issues"))
                 }
             }
+            .cardIndex(1)
             
             StaticCard("特别鸣谢") {
                 VStack(spacing: 0) {
@@ -48,6 +49,7 @@ struct AboutPage: View {
                                 .init("前往赞助", "https://afdian.com/a/bangbang93"))
                 }
             }
+            .cardIndex(2)
             
             StaticCard("许可与版权声明") {
                 VStack(spacing: 15) {

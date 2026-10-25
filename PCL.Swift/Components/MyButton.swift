@@ -62,6 +62,7 @@ struct MyButton: View {
             disabled: disabled,
             action: action
         ))
+        .pointingHandCursor(isEnabled: !disabled)
     }
 }
 

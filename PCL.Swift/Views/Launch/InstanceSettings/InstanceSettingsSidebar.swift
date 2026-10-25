@@ -22,11 +22,9 @@ struct InstanceSettingsSidebar: Sidebar {
         VStack {
             MyNavigationList(
                 .init(.instanceOverview(id: id), .iconBlock, "概览"),
-                .init(.instanceConfig(id: id), .iconSettingsPage, "配置"),
+                .init(.instanceConfig(id: id), .iconSettingsPage, "设置"),
+                // 原版的资源包 / 光影包 / 数据包没有独立条目，都在「Mod 管理」里按类型切换。
                 .init(.installedResources(id: id, type: .mod), .iconMod, "Mod 管理"),
-                .init(.installedResources(id: id, type: .resourcepack), .iconPicture, "资源包"),
-                .init(.installedResources(id: id, type: .shader), .iconSun, "光影包"),
-                .init(.installedResources(id: id, type: .datapack), .iconBox, "数据包"),
                 .init(.instanceExport(id: id), .iconUpload, "导出")
             )
             Spacer()

@@ -136,7 +136,7 @@ struct LaunchSidebar: Sidebar {
                             }
                         }
                     } else if instanceVM.loading {
-                        MyButton("加载中", subLabel: "正在加载实例列表", disabled: true) {}
+                        MyButton("正在加载", subLabel: "正在加载实例列表", disabled: true) {}
                     } else {
                         MyButton("下载游戏", subLabel: "未找到可用的游戏实例", type: .normal) {
                             AppRouter.shared.setRoot(.download)
@@ -145,12 +145,12 @@ struct LaunchSidebar: Sidebar {
                 }
                 .frame(height: 50)
                 HStack(spacing: 11) {
-                    MyButton("实例选择") {
+                    MyButton("版本选择") {
                         dshSelection.leave()
                         AppRouter.shared.append(.instanceList(repositoryId: instanceVM.currentRepository.id))
                     }
                     if let instance = instanceVM.currentInstance {
-                        MyButton("实例设置") {
+                        MyButton("版本设置") {
                             AppRouter.shared.append(.instanceSettings(id: instance.name))
                         }
                     }

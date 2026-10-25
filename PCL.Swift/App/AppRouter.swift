@@ -59,7 +59,7 @@ class AppRouter: ObservableObject {
         case .instanceList: "实例列表"
         case .dshInstanceList: "DSH"
         case .instanceSettings(let id), .instanceConfig(let id), .installedResources(let id, _),
-             .instanceOverview(let id), .instanceExport(let id): "实例设置 - \(id)"
+             .instanceOverview(let id), .instanceExport(let id): "版本设置 - \(id)"
         case .minecraftInstallOptions(let version): "游戏安装 - \(version.id)"
         case .projectInstall(let project): "资源下载 - \(project.title)"
         default: "错误：当前页面（\(last)）没有标题，请报告此问题！"
@@ -91,16 +91,31 @@ class AppRouter: ObservableObject {
         // 各根页面的默认子页面
         if newRoot == .download { append(.minecraftDownload) }
         if newRoot == .multiplayer { append(.multiplayerSub) }
-        if newRoot == .settings { append(.personalizationSettings) }
+        // 设置页的首个条目是「启动」（原「游戏」页），进入设置就落在它上面。
+        if newRoot == .settings { append(.gameSettings) }
         if newRoot == .more { append(.about) }
     }
     
     func append(_ route: AppRoute) {
         guard isRouteAvailable(route) else { return }
         path.append(route)
-        if case .instanceSettings(let id) = route { append(.instanceConfig(id: id)) }
+        // 进入版本设置时先落在「概览」，与 PCL2 一致；设置页要自己点过去。
+        if case .instanceSettings(let id) = route { append(.instanceOverview(id: id)) }
     }
     
+    /// 在同一层级替换当前子页面（例如「Mod 管理」里切换资源类型）。
+    ///
+    /// 不能用 removeLast() + append：removeLast 在落到 instanceSettings 时会连着
+    /// 把实例设置层也弹掉，结果换完类型就退回启动页了。
+    func replaceLast(_ route: AppRoute) {
+        guard path.count > 1 else {
+            append(route)
+            return
+        }
+        path.removeLast()
+        append(route)
+    }
+
     func removeLast() {
         if path.count > 1 {
             path.removeLast()
@@ -219,6 +234,7 @@ struct AppSidebarView: View {
     @ObservedObject private var router: AppRouter = .shared
     @ObservedObject private var themeManager: ThemeManager = .shared
     @State private var width: CGFloat = 0
+    /// 启动页 / 任务页侧边栏的"淡入 + 轻微放大"入场进度。
     @State private var animationProgress: Double = 0
 
     init() {}
@@ -254,28 +270,40 @@ struct AppSidebarView: View {
                 .zIndex(11)
                 .frame(width: sidebarWidth)
         }
+        // 布局宽度必须一步到位：白色底板单独做宽度动画，容器宽度不跟着变，
+        // 否则右侧页面会随收缩动画横移，卡片入场时看起来在漂。
+        .frame(width: sidebarWidth, alignment: .leading)
         .onAppear {
             width = sidebarWidth
-            if themeManager.isAdjustingCustomTheme {
-                animationProgress = 1.0
-                return
-            }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                animationProgress = 1.0
+            if router.root == .launch || router.root == .tasks {
+                playLegacyEntrance()
+            } else {
+                animationProgress = 1
             }
         }
         .onChange(of: sidebarWidth) { newWidth in
             withAnimation(.spring(response: 0.16, dampingFraction: 1.0)) {
                 width = newWidth
             }
-            switch router.last {
-            case .launch, .tasks:
-                animationProgress = 0.0
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                    animationProgress = 1.0
-                }
-            default:
-                break
+            // 只有启动页 / 任务页的侧边栏用这套淡入 + 放大；
+            // 其它页面的入场在 MyNavigationList 里逐条目播放，两套不能同时挂。
+            if router.root == .launch || router.root == .tasks {
+                playLegacyEntrance()
+            }
+        }
+    }
+
+    /// 启动页 / 任务页侧边栏的入场动画（账户面板自己还有一层 insertTransition）。
+    private func playLegacyEntrance() {
+        guard !themeManager.isAdjustingCustomTheme else {
+            animationProgress = 1
+            return
+        }
+        animationProgress = 0
+        // 下一帧再推到 1：同一次状态更新里 0 → 1 不会产生动画。
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                animationProgress = 1
             }
         }
     }

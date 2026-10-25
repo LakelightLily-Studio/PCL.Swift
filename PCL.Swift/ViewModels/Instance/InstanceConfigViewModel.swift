@@ -13,35 +13,23 @@ import Core
 class InstanceConfigViewModel: ObservableObject {
     /// 直接持有实例并观察它：改图标/改名后配置页头部会立刻刷新。
     public var instance: MinecraftInstance
-    @Published public var jvmHeapSize: String = ""
-    @Published public var jvmArguments: String = ""
+
+    // 启动选项
+    @Published public var isolation: Bool = true { didSet { scheduleAutoSave() } }
     @Published public var javaDescription: String = "无"
 
-    // 窗口
-    @Published public var windowTitle: String = ""
-    @Published public var windowType: GameWindowType = .standard
-    @Published public var windowWidth: String = "854"
-    @Published public var windowHeight: String = "480"
+    // 内存
+    @Published public var memoryMode: MemoryAllocationMode? { didSet { scheduleAutoSave() } }
+    @Published public var jvmHeapSize: String = "" { didSet { scheduleAutoSave() } }
 
-    // 进程
-    @Published public var launcherVisibility: LauncherVisibility = .keepVisible
-    @Published public var processPriority: ProcessPriority = .normal
+    // 高级选项
+    @Published public var jvmArguments: String = "" { didSet { scheduleAutoSave() } }
+    @Published public var gameArguments: String = "" { didSet { scheduleAutoSave() } }
+    @Published public var prelaunchCommand: String = "" { didSet { scheduleAutoSave() } }
+    @Published public var garbageCollector: GarbageCollectorMode? { didSet { scheduleAutoSave() } }
 
-    // 命令与参数
-    @Published public var prelaunchCommand: String = ""
-    @Published public var prelaunchWaitForCompletion: Bool = false
-    @Published public var gameArguments: String = ""
-    @Published public var memoryOptimize: Bool = false
-
-    /// 各字段是否跟随全局。界面上用「跟随全局」开关表示，对应 config 里的 nil。
-    @Published public var followsGlobalWindowTitle: Bool = true
-    @Published public var followsGlobalWindowSize: Bool = true
-    @Published public var followsGlobalVisibility: Bool = true
-    @Published public var followsGlobalPriority: Bool = true
-    @Published public var followsGlobalPrelaunch: Bool = true
-    @Published public var followsGlobalGameArguments: Bool = true
-    @Published public var followsGlobalJvmArguments: Bool = true
-    @Published public var followsGlobalMemoryOptimize: Bool = true
+    /// 实例 mods 目录里的 Mod 数量，「自动配置」按它抬档（与启动时的算法一致）。
+    public let modCount: Int
 
     public var description: String {
         if let modLoader: ModLoader = instance.modLoader {
@@ -54,75 +42,77 @@ class InstanceConfigViewModel: ObservableObject {
     public var icon: InstanceIcon { instance.icon }
 
     public let id: String
-    private let instanceManager: InstanceManager
     private var instanceCancellable: AnyCancellable?
+    /// 自动保存的防抖任务。页面没有「保存设置」按钮，改动即生效。
+    private var autoSaveTask: Task<Void, Never>?
 
     public init(instanceManager: InstanceManager, id: String) {
-        self.instanceManager = instanceManager
         self.id = id
         let instance: MinecraftInstance = instanceManager.currentRepository.instance(named: id)! // TODO: 改为安全解包
         self.instance = instance
+        self.modCount = Self.countMods(in: instance)
         // 实例自己会发 objectWillChange（改图标/改名时），转发出来，
         // 否则页面读到的是旧值。
         self.instanceCancellable = instance.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
         let config: MinecraftInstance.Config = instance.config
-        self.jvmHeapSize = config.jvmHeapSize.description
+        self.isolation = config.isolation ?? true
+        self.memoryMode = config.memoryMode
+        self.jvmHeapSize = (config.jvmHeapSize ?? LauncherConfig.shared.resolvedMemoryMB).description
         self.jvmArguments = config.jvmArguments.joinedToArgumentLine()
+        self.gameArguments = (config.gameArguments ?? []).joinedToArgumentLine()
+        self.prelaunchCommand = config.prelaunchCommand ?? ""
+        self.garbageCollector = config.garbageCollector
         do {
-            self.javaDescription = try config.javaURL.map({ try JavaSearcher.load(from: $0) })?.description ?? "无"
+            self.javaDescription = try config.javaURL.map { try JavaSearcher.load(from: $0) }?.description ?? "自动选择"
         } catch {
             // 已配置的 Java 读不出来时只是描述缺失，页面仍可正常显示，用户可在列表里重新选择。
-            self.javaDescription = "无"
+            self.javaDescription = "自动选择"
             warn("读取实例已配置的 Java 失败：\(error.localizedDescription)")
         }
-
-        let global: LauncherConfig = .shared
-        self.followsGlobalWindowTitle = config.gameWindowTitle == nil
-        self.windowTitle = config.gameWindowTitle ?? global.gameWindowTitle
-        self.windowType = config.gameWindowType ?? global.gameWindowType
-        self.followsGlobalWindowSize = config.gameWindowWidth == nil && config.gameWindowHeight == nil
-        self.windowWidth = String(config.gameWindowWidth ?? global.gameWindowWidth)
-        self.windowHeight = String(config.gameWindowHeight ?? global.gameWindowHeight)
-        self.followsGlobalVisibility = config.launcherVisibility == nil
-        self.launcherVisibility = config.launcherVisibility ?? global.launcherVisibility
-        self.followsGlobalPriority = config.processPriority == nil
-        self.processPriority = config.processPriority ?? global.processPriority
-        self.followsGlobalPrelaunch = config.prelaunchCommand == nil
-        self.prelaunchCommand = config.prelaunchCommand ?? global.prelaunchCommand
-        self.prelaunchWaitForCompletion = config.prelaunchWaitForCompletion ?? global.prelaunchWaitForCompletion
-        self.followsGlobalGameArguments = config.gameArguments == nil
-        self.gameArguments = (config.gameArguments ?? global.gameArguments.splitToArguments()).joinedToArgumentLine()
-        self.followsGlobalJvmArguments = config.jvmArguments.isEmpty
-        self.followsGlobalMemoryOptimize = config.memoryOptimize == nil
-        self.memoryOptimize = config.memoryOptimize ?? global.memoryOptimize
     }
 
-    /// 删除当前实例。
-    ///
-    /// 直接调 repository，不再为了一个方法去构造整个 InstanceViewModel
-    /// （那会连带 4 个 Combine 订阅与一次 flatMap 类型擦除）。
-    func deleteInstance() throws {
-        try instanceManager.currentRepository.removeInstance(instance)
+    /// 全部已安装的 Java（含当前选中的），「Java」下拉用。
+    public func javaChoices() -> [JavaRuntime] {
+        JavaManager.shared.javaRuntimes.sorted { $0.version > $1.version }
     }
 
-    public func javaList() -> [JavaRuntime] {
-        return JavaManager.shared.javaRuntimes
-            .filter { $0.executableURL != instance.config.javaURL }
-            .sorted { $0.version > $1.version }
+    /// 恢复为「自动选择」：清掉实例的 Java 覆盖值，交给 JavaSearcher 按版本挑。
+    @MainActor
+    public func setAutomaticJava() {
+        instance.config.javaURL = nil
+        instance.markDirty()
+        javaDescription = "自动选择"
+        scheduleAutoSave()
+    }
+
+    /// 数一下实例 mods 目录里的 Mod。只用于「自动配置」的预览值，
+    /// 真正启动时 MinecraftLaunchTask 会按同一套规则再数一次。
+    private static func countMods(in instance: MinecraftInstance) -> Int {
+        let modsURL: URL = instance.url.appending(path: "mods")
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: modsURL.path) else {
+            return 0
+        }
+        return files.filter {
+            ["jar", "zip", "litemod"].contains(($0 as NSString).pathExtension.lowercased())
+        }.count
     }
 
     @MainActor
     public func setHeapSize(_ heapSize: UInt64) {
+        // 手动改数值等于切到「自定义」，否则这次修改会被 applyChanges 当成 nil 写回。
+        memoryMode = .custom
         instance.config.jvmHeapSize = heapSize
         instance.markDirty()
+        scheduleAutoSave()
     }
 
     @MainActor
     public func setJvmArguments(_ arguments: String) {
         instance.config.jvmArguments = arguments.splitToArguments()
         instance.markDirty()
+        scheduleAutoSave()
     }
 
     @MainActor
@@ -133,11 +123,12 @@ class InstanceConfigViewModel: ObservableObject {
         instance.config.javaURL = runtime.executableURL
         instance.markDirty()
         javaDescription = runtime.description
+        scheduleAutoSave()
     }
 
     // MARK: - 三态写回
 
-    /// 把界面上的"跟随全局"与具体值写回实例配置。
+    /// 把界面上的值与「跟随全局」的留空语义写回实例配置。
     ///
     /// 统一在这里落盘，而不是每个控件各写一份：任何一个字段漏了
     /// markDirty，界面看起来改了、重启就丢。
@@ -145,23 +136,34 @@ class InstanceConfigViewModel: ObservableObject {
     func applyChanges() {
         var config: MinecraftInstance.Config = instance.config
 
-        config.gameWindowTitle = followsGlobalWindowTitle ? nil : windowTitle
-        config.gameWindowType = windowType
-        if followsGlobalWindowSize {
-            config.gameWindowWidth = nil
-            config.gameWindowHeight = nil
-        } else {
-            config.gameWindowWidth = Int(windowWidth)
-            config.gameWindowHeight = Int(windowHeight)
-        }
-        config.launcherVisibility = followsGlobalVisibility ? nil : launcherVisibility
-        config.processPriority = followsGlobalPriority ? nil : processPriority
-        config.prelaunchCommand = followsGlobalPrelaunch ? nil : prelaunchCommand
-        config.prelaunchWaitForCompletion = prelaunchWaitForCompletion
-        config.gameArguments = followsGlobalGameArguments ? nil : gameArguments.splitToArguments()
-        config.memoryOptimize = followsGlobalMemoryOptimize ? nil : memoryOptimize
+        config.isolation = isolation ? nil : false
+
+        config.memoryMode = memoryMode
+        config.jvmHeapSize = memoryMode == .custom ? UInt64(jvmHeapSize) : nil
+
+        // 留空即跟随全局：与 PCL2 的「留空则跟随全局设置」一致。
+        config.gameArguments = gameArguments.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil : gameArguments.splitToArguments()
+        config.prelaunchCommand = prelaunchCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil : prelaunchCommand
+        config.garbageCollector = garbageCollector
+
         instance.config = config
         instance.markDirty()
+    }
+
+    /// 安排一次延迟落盘。
+    ///
+    /// 页面去掉了「保存设置」按钮，任何改动都要自己写回磁盘。拖滑杆、连续
+    /// 输入都是高频事件，逐个写盘会把 IO 打满，所以合并成"停下来 0.4s 后
+    /// 存一次"。
+    private func scheduleAutoSave() {
+        autoSaveTask?.cancel()
+        autoSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            self?.save()
+        }
     }
 
     @MainActor

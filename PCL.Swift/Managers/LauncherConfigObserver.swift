@@ -19,8 +19,7 @@ final class LauncherConfigObserver: ObservableObject {
     /// 单调递增的变更计数。
     ///
     /// 视图用 .onChange(of: tick) 订阅：objectWillChange 只对 @ObservedObject
-    /// 的持有者生效，而 BackgroundLayer 这类深层视图拿不到同一个实例的
-    /// 变化通知时，用计数值做 key 最省事。
+    /// 的持有者生效，拿不到同一个实例的深视图靠这个计数值做 key 最省事。
     @Published private(set) var tick: Int = 0
 
     private init() {}

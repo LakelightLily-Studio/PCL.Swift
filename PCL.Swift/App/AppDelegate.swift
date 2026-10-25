@@ -77,7 +77,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Core 读不到 App 层的 LauncherConfig，启动时把默认值灌进去一次。
         LauncherConfigDefaults.launcherVisibility = LauncherConfig.shared.launcherVisibility
         LauncherConfigDefaults.processPriority = LauncherConfig.shared.processPriority
-        LauncherConfigDefaults.memoryOptimize = LauncherConfig.shared.memoryOptimize
         
         JavaManager.install(.init(customJavaRuntimes: LauncherConfig.shared.customJavaRuntimes))
         
@@ -211,33 +210,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 return nil
             }
-            return self.handleDemoShortcut(event) ? nil : event
+            return event
         }
-    }
-    
-    /// demo 分支专用：⌘R 重播进入动画与整段开场流程，1–4 切换顶栏页面。
-    /// 弹窗打开时不拦截，避免抢掉对话框自己的键盘焦点。
-    /// 需要读 `startupFlow`，因此从静态方法改成实例方法。
-    private func handleDemoShortcut(_ event: NSEvent) -> Bool {
-        guard MessageBoxManager.shared.currentMessageBox == nil else { return false }
-        
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if flags == .command, event.charactersIgnoringModifiers?.lowercased() == "r" {
-            DispatchQueue.main.async {
-                DemoState.shared.replayEntryAnimation()
-                // 顺便重播整段开场：窗口缩回动画画布，再走一遍动画 → 向导 → 主体。
-                self.startupFlow?.restartOnboarding()
-            }
-            return true
-        }
-        
-        // 无修饰键的数字键。
-        if flags.isEmpty, let index = DemoState.digitKeyCodes.firstIndex(of: event.keyCode) {
-            DispatchQueue.main.async {
-                DemoState.shared.openRootPage(at: index)
-            }
-            return true
-        }
-        return false
     }
 }

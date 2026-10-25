@@ -2,7 +2,10 @@
 //  InstanceExportPage.swift
 //  PCL.Swift
 //
-//  实例导出：整合包（.mrpack）与启动脚本。
+//  实例导出：整合包（.mrpack）。
+//
+//  原来的「导出启动脚本」卡已按要求删除，脚本导出与它依赖的
+//  InstanceExportViewModel.exportScript 一并移除。
 //
 
 import SwiftUI
@@ -38,22 +41,6 @@ struct InstanceExportPage: View {
                     .frame(height: 35)
                 }
             }
-
-            MyCard("导出启动脚本", foldable: false) {
-                VStack(alignment: .leading, spacing: 10) {
-                    MyText("把当前实例的 JVM 与游戏参数展开成一个可执行的 shell 脚本。", size: 12, color: .colorGray2)
-                    MyTip(text: "脚本里的 accessToken 会被替换为占位符，直接运行会以离线身份进入游戏。", theme: .yellow)
-                    HStack {
-                        MyButton("导出脚本") {
-                            viewModel.exportScript()
-                        }
-                        .frame(width: 130)
-                        Spacer()
-                    }
-                    .frame(height: 35)
-                }
-            }
-            .cardIndex(1)
         }
     }
 }

@@ -17,12 +17,15 @@ class ModpackViewModel: ObservableObject {
     
     @MainActor
     public func importModpack(at url: URL, repository: MinecraftRepository) async {
-        guard let curseforgeApiKey = Secrets.shared.curseforgeApiKey else {
-            hint("缺少 CurseForge API Key，无法开始整合包导入，请尝试从官方渠道重新下载 PCL.Swift！", type: .critical)
-            return
+        // CurseForge API Key 只对 CurseForge 格式的整合包是必需的。
+        //
+        // 原先这里无条件 guard，导致没有配置 Key 的构建连 Modrinth / .mrpack /
+        // 普通压缩包都导不进来（Issue #2：不能导入整合包）。现在把「有没有 Key」
+        // 交给服务层判断：只有真的碰到 manifest.json（CurseForge 格式）时才报错。
+        let curseforgeClient: CurseForgeAPIClient? = Secrets.shared.curseforgeApiKey.map {
+            .init(apiKey: $0)
         }
-        
-        let service = ModpackImportService(curseforgeClient: .init(apiKey: curseforgeApiKey), modpackURL: url)
+        let service = ModpackImportService(curseforgeClient: curseforgeClient, modpackURL: url)
         
         let handleUnknownError: (Error) -> Void = { (error: Error) in
             MessageBoxManager.shared.showText(
@@ -73,6 +76,12 @@ class ModpackViewModel: ObservableObject {
                 MessageBoxManager.shared.showText(
                     title: "不支持的模组加载器",
                     content: "很抱歉，PCL.Swift 暂时不支持安装这个整合包使用的 \(name) 加载器……",
+                    level: .error
+                )
+            case .missingCurseforgeClient:
+                MessageBoxManager.shared.showText(
+                    title: "缺少 CurseForge API Key",
+                    content: "这个整合包使用 CurseForge 格式（内含 manifest.json），需要 CurseForge API Key 才能解析。\n\n请从官方渠道重新下载 PCL.Swift，或设置环境变量 PCLMAC_CURSE_FORGE_API_KEY 后重启启动器。",
                     level: .error
                 )
             case .unknownFormat:

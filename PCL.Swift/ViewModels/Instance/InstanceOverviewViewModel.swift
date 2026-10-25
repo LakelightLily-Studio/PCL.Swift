@@ -126,6 +126,15 @@ class InstanceOverviewViewModel: ObservableObject {
 
     // MARK: - 元数据
 
+    /// 删除当前实例。
+    ///
+    /// 原版的版本设置页没有这颗按钮（删除在版本列表的右键菜单里），
+    /// 本启动器没有右键菜单，所以放在「概览 → 操作」，别让功能凭空消失。
+    @MainActor
+    func deleteInstance() throws {
+        try instanceManager.currentRepository.removeInstance(instance)
+    }
+
     func toggleFavorite() {
         instance.isFavorite.toggle()
         instance.markDirty()
@@ -176,6 +185,33 @@ class InstanceOverviewViewModel: ObservableObject {
             err("设置实例图标失败：\(error.localizedDescription)")
             hint("设置实例图标失败：\(error.localizedDescription)", type: .critical)
         }
+    }
+
+    /// 清空自定义图标，回到按加载器推断的默认图标。
+    func clearIcon() {
+        if let old = instance.customIconURL {
+            do {
+                try FileManager.default.removeItem(at: old)
+            } catch {
+                warn("删除旧图标失败：\(error.localizedDescription)")
+            }
+        }
+        instance.customIconURL = nil
+        instance.markDirty()
+        save()
+        iconImage = Self.loadIcon(for: instance)
+    }
+
+    /// 仓库里已经用过的分类，供「分类」下拉选择。
+    var availableCategories: [String] {
+        let instances: [MinecraftInstance] = Array((instanceManager.currentRepository.instances ?? [:]).values)
+        let categories: [String] = instances.compactMap(\.category)
+        return Array(Set(categories.filter { !$0.isEmpty })).sorted()
+    }
+
+    /// 按 key 取目录，快捷方式卡按需取用。
+    func folder(_ key: String) -> Folder? {
+        folders.first { $0.key == key }
     }
 
     /// 重新校验并补齐实例文件。

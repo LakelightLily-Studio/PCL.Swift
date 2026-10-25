@@ -2,15 +2,13 @@
 //  InstanceOverviewPage.swift
 //  PCL.Swift
 //
-//  实例概览：图标、显示名、描述、收藏、分类，以及各子目录的快捷入口。
+//  实例设置 → 概览。
 //
-//  与原版 PCL 的「概览」页对应。这里只做"看一眼 + 改元数据 + 打开目录"，
-//  真正的启动参数在「配置」页，资源在「Mod 管理」等页。
+//  卡片与行序对齐 PCL2 的 PageInstanceOverall：实例信息 / 个性化 / 快捷方式 / 高级管理。
 //
 
 import SwiftUI
 import Core
-import UniformTypeIdentifiers
 
 struct InstanceOverviewPage: View {
     @StateObject private var viewModel: InstanceOverviewViewModel
@@ -22,152 +20,177 @@ struct InstanceOverviewPage: View {
     var body: some View {
         CardContainer {
             headerCard
-            folderCard
+            personalizationCard
                 .cardIndex(1)
-            actionCard
+            shortcutCard
                 .cardIndex(2)
+            managementCard
+                .cardIndex(3)
         }
     }
 
-    // MARK: - 头部
+    // MARK: - 实例信息
 
     private var headerCard: some View {
-        MyCard(nil) {
-            HStack(alignment: .top, spacing: 14) {
-                iconView
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(Color.colorGray5, lineWidth: 1)
-                    }
-                    .contentShape(.rect)
-                    .onTapGesture { chooseIcon() }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        MyText(viewModel.displayTitle, size: 18)
+        MyCard(nil, padding: 10) {
+            MyListItem { _ in
+                HStack(spacing: 0) {
+                    InstanceIconView(icon: icon)
+                        .frame(width: 36, height: 36)
+                        .padding(.trailing, 6)
+                    VStack(alignment: .leading, spacing: 2) {
+                        MyText(viewModel.displayTitle)
                             .lineLimit(1)
-                        if viewModel.isFavorite {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.color3)
-                        }
-                        Spacer(minLength: 0)
+                        MyText(viewModel.subtitle, color: .colorGray3)
+                            .lineLimit(1)
                     }
-                    MyText(viewModel.subtitle, size: 12, color: .colorGray3)
-                        .lineLimit(1)
-                    MyText(viewModel.descriptionText, size: 12, color: .colorGray2)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                VStack(alignment: .trailing, spacing: 8) {
-                    MyButton(viewModel.isFavorite ? "取消收藏" : "加入收藏") {
-                        viewModel.toggleFavorite()
-                        hint(viewModel.isFavorite ? "已加入收藏夹！" : "已取消收藏！", type: .finish)
-                    }
-                    .frame(width: 100)
-                    MyButton("更换图标") {
-                        chooseIcon()
-                    }
-                    .frame(width: 100)
-                }
-            }
-            .padding(4)
-        }
-    }
-
-    @ViewBuilder
-    private var iconView: some View {
-        if let image = viewModel.iconImage {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.none)
-                .scaledToFit()
-        } else {
-            Image(viewModel.fallbackIcon)
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(Color.color1)
-                .padding(6)
-        }
-    }
-
-    // MARK: - 文件夹
-
-    private var folderCard: some View {
-        MyCard("文件夹", foldable: false) {
-            VStack(spacing: 0) {
-                ForEach(viewModel.folders, id: \.key) { folder in
-                    MyListItem { hovered in
-                        HStack {
-                            Image(systemName: "folder")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 18)
-                                .foregroundStyle(hovered ? Color.color3 : .colorGray2)
-                            VStack(alignment: .leading, spacing: 2) {
-                                MyText(folder.title)
-                                MyText(folder.relativePath, size: 12, color: .colorGray3)
-                                    .lineLimit(1)
-                            }
-                            Spacer(minLength: 0)
-                            if !folder.exists {
-                                MyTag("不存在", labelColor: .colorGray2, backgroundColor: .black.opacity(0.05), size: 12)
-                            }
-                        }
-                        .padding(.vertical, 2)
-                    }
-                    .onTapGesture {
-                        viewModel.open(folder)
-                        // 打开时可能顺手建了目录，回来后刷新一次存在状态。
-                        viewModel.refreshFolders()
-                    }
+                    Spacer(minLength: 0)
                 }
             }
         }
     }
 
-    // MARK: - 操作
+    /// 图标视图的输入：自定义图片 > 加载器图标 > 兜底草方块。
+    private var icon: InstanceIcon {
+        if let image = viewModel.iconImage { return .custom(image) }
+        if let loader = viewModel.instance.modLoader { return .loader(loader) }
+        return .fallback
+    }
 
-    private var actionCard: some View {
-        MyCard("操作", foldable: false) {
+    // MARK: - 个性化
+
+    private var personalizationCard: some View {
+        MyCard("个性化", foldable: false) {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 15) {
-                    MyButton("修改名称") { rename() }
-                        .frame(width: 110)
-                    MyButton("修改描述") { editDescription() }
-                        .frame(width: 110)
-                    MyButton("设置分类") { editCategory() }
-                        .frame(width: 110)
+                SettingRow("图标", labelWidth: 80) {
+                    MySelect(iconBinding, entries: IconOption.allCases)
+                        .frame(maxWidth: .infinity)
+                }
+                SettingRow("分类", labelWidth: 80) {
+                    MySelect(categoryBinding, entries: categoryEntries)
+                        .frame(maxWidth: .infinity)
+                }
+                HStack(spacing: 20) {
+                    MyButton("修改版本名") { rename() }
+                        .frame(width: 140)
+                    MyButton("修改版本描述") { editDescription() }
+                        .frame(width: 140)
+                    MyButton(viewModel.isFavorite ? "取消收藏" : "加入收藏夹") {
+                        viewModel.toggleFavorite()
+                    }
+                    .frame(width: 140)
                     Spacer()
                 }
                 .frame(height: 35)
-
-                HStack(spacing: 15) {
-                    MyButton("补全文件") {
-                        viewModel.repair()
-                    }
-                    .frame(width: 110)
-                    MyButton("导出启动脚本") {
-                        AppRouter.shared.append(.instanceExport(id: viewModel.instanceName))
-                    }
-                    .frame(width: 130)
-                    MyButton("导出整合包") {
-                        AppRouter.shared.append(.instanceExport(id: viewModel.instanceName))
-                    }
-                    .frame(width: 110)
-                    Spacer()
-                }
-                .frame(height: 35)
-
-                MyTip(text: "补全会重新校验并补齐缺失的客户端、资源索引与依赖库。它不会删除你已经装的 Mod 与存档。", theme: .blue)
+                .padding(.top, 4)
             }
+        }
+    }
+
+    /// 图标下拉：原版在这里列出一堆预设方块图标，本启动器只有「自动 / 自定义图片」两种来源。
+    enum IconOption: String, CaseIterable, CustomStringConvertible {
+        case automatic, custom
+
+        var description: String {
+            self == .automatic ? "自动" : "自定义…"
+        }
+    }
+
+    private var iconBinding: Binding<IconOption> {
+        .init(
+            get: { viewModel.instance.customIconURL == nil ? .automatic : .custom },
+            set: { option in
+                switch option {
+                case .automatic:
+                    viewModel.clearIcon()
+                case .custom:
+                    chooseIcon()
+                }
+            }
+        )
+    }
+
+    private var categoryEntries: [String] {
+        ["自动"] + viewModel.availableCategories + ["新建分类…"]
+    }
+
+    private var categoryBinding: Binding<String> {
+        .init(
+            get: { viewModel.instance.category ?? "自动" },
+            set: { value in
+                switch value {
+                case "自动":
+                    viewModel.setCategory("")
+                case "新建分类…":
+                    createCategory()
+                default:
+                    viewModel.setCategory(value)
+                }
+            }
+        )
+    }
+
+    // MARK: - 快捷方式
+
+    private var shortcutCard: some View {
+        MyCard("快捷方式", foldable: false) {
+            HStack(spacing: 20) {
+                folderButton("root", "版本文件夹")
+                folderButton("saves", "存档文件夹")
+                folderButton("mods", "Mod 文件夹")
+                folderButton("screenshots", "截图文件夹")
+                Spacer()
+            }
+            .frame(height: 35)
+        }
+    }
+
+    private func folderButton(_ key: String, _ title: String) -> some View {
+        MyButton(title) {
+            guard let folder = viewModel.folder(key) else { return }
+            viewModel.open(folder)
+        }
+        .frame(width: 140)
+    }
+
+    // MARK: - 高级管理
+
+    private var managementCard: some View {
+        MyCard("高级管理", foldable: false) {
+            HStack(spacing: 20) {
+                MyButton("补全文件") {
+                    viewModel.repair()
+                }
+                .frame(width: 140)
+                MyButton("删除版本", type: .red) { confirmDelete() }
+                    .frame(width: 140)
+                Spacer()
+            }
+            .frame(height: 35)
         }
     }
 
     // MARK: - 交互
+
+    private func confirmDelete() {
+        MessageBoxManager.shared.showText(
+            title: "确认",
+            content: "你确定要删除这个版本（\(viewModel.displayTitle)）吗？\n这个版本的所有存档、模组、资源包等将会永久消失！（真的很久！）",
+            level: .error,
+            .no(),
+            .yes(type: .red)
+        ) { result in
+            if result == 1 {
+                do {
+                    try viewModel.deleteInstance()
+                    hint("删除成功！", type: .finish)
+                    AppRouter.shared.removeLast()
+                } catch {
+                    hint("删除版本失败：\(error.localizedDescription)", type: .critical)
+                }
+            }
+        }
+    }
 
     private func chooseIcon() {
         let panel: NSOpenPanel = .init()
@@ -206,10 +229,10 @@ struct InstanceOverviewPage: View {
         }
     }
 
-    private func editCategory() {
+    private func createCategory() {
         MessageBoxManager.shared.showInput(
             title: "输入分类名称",
-            initialContent: viewModel.category ?? "",
+            initialContent: "",
             placeholder: "例如：生存、科技、整合"
         ) { text in
             guard let text else { return }

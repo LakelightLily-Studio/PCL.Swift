@@ -22,7 +22,7 @@ struct MyCard<Content: View>: View {
 
     /// 下移出现动画变量。
     @State private var appeared: Bool = false
-    /// 下移出现动画是否已完成。
+    /// 入场动画是否已完成（完成前不播悬停动画）。
     @State private var appearFinished: Bool = false
     /// 卡片是否已被折叠。
     @State private var folded: Bool = true
@@ -63,10 +63,15 @@ struct MyCard<Content: View>: View {
         self.title = title ?? ""
         self.titled = title != nil
         self.foldable = foldable && titled
-        self.initialFolded = folded ?? (self.foldable ? true : false)
+        self.initialFolded = folded ?? self.foldable
         self.padding = padding
         self.content = content
         self.action = nil
+        // 折叠状态在 init 里就位，而不是等到 onAppear：
+        // 首帧如果还按"展开"布局，进入页面时会看到卡片内容整个弹开再收回。
+        self._folded = .init(initialValue: self.initialFolded)
+        self._showContent = .init(initialValue: !self.initialFolded)
+        self._contentHeightLimit = .init(initialValue: self.initialFolded ? 0 : nil)
     }
 
     /// 带右上角操作的卡片。
@@ -84,10 +89,13 @@ struct MyCard<Content: View>: View {
         self.title = title ?? ""
         self.titled = title != nil
         self.foldable = foldable && titled
-        self.initialFolded = folded ?? (self.foldable ? true : false)
+        self.initialFolded = folded ?? self.foldable
         self.padding = padding
         self.content = content
         self.action = { AnyView(action()) }
+        self._folded = .init(initialValue: self.initialFolded)
+        self._showContent = .init(initialValue: !self.initialFolded)
+        self._contentHeightLimit = .init(initialValue: self.initialFolded ? 0 : nil)
     }
 
     var body: some View {
@@ -102,6 +110,8 @@ struct MyCard<Content: View>: View {
                             .resizable()
                             .frame(width: 10, height: 6)
                             .rotationEffect(.degrees(folded ? 0 : -180), anchor: .center)
+                            // PCL2 的箭头是 250ms 的 easeOutFluent(ExtraStrong)。
+                            .animation(CardFold.arrowRotation, value: folded)
                     } else if let action {
                         action()
                     }
@@ -115,41 +125,46 @@ struct MyCard<Content: View>: View {
                     self.foldWorkItem?.cancel()
                     interactionState.isTransitioning = true
 
+                    // 目标高度先夹到 1000：内容再长也不该让动画跑几秒。
+                    // 动画结束后再把限制放开，交给自然高度。
+                    let targetHeight: CGFloat = min(1000, actualContentHeight) + padding
                     if folded {
                         // 展开卡片
-                        withAnimation(.spring(response: 0.35)) {
-                            folded = false
-                        }
+                        folded = false
                         showContent = true
-                        withAnimation(.linear(duration: 0.2)) {
-                            contentHeightLimit = min(1000, actualContentHeight) + padding
+                        withAnimation(CardFold.animation(forDelta: targetHeight)) {
+                            contentHeightLimit = targetHeight
                         }
+                        let duration: Double = CardFold.duration(forDelta: targetHeight)
                         let foldWorkItem: DispatchWorkItem = .init {
                             contentHeightLimit = nil
                             interactionState.isTransitioning = false
                         }
                         self.foldWorkItem = foldWorkItem
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: foldWorkItem)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: foldWorkItem)
                     } else {
                         // 折叠卡片
-                        withAnimation(.spring(response: 0.35)) {
-                            folded = true
+                        folded = true
+                        let startHeight: CGFloat = contentHeightLimit ?? targetHeight
+                        contentHeightLimit = startHeight
+                        withAnimation(CardFold.animation(forDelta: -startHeight)) {
+                            contentHeightLimit = 0
                         }
+                        let duration: Double = CardFold.duration(forDelta: -startHeight)
                         let foldWorkItem: DispatchWorkItem = .init {
                             showContent = false
                             interactionState.isTransitioning = false
                         }
                         self.foldWorkItem = foldWorkItem
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: foldWorkItem)
-                        contentHeightLimit = min(1000, actualContentHeight) + padding // 控制回弹上限
-                        withAnimation(.spring(response: 0.35)) {
-                            contentHeightLimit = 0
-                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: foldWorkItem)
                     }
                 }
             }
 
-            if showContent || actualContentHeight == 0 {
+            // 内容始终挂载：折叠时只是高度 0 + 透明。
+            // 早先折叠后会把它从视图树里摘掉，再点开时需要重建整棵内容树并
+            // 重新布局——主页这种上百个文本节点的卡片，那一帧就是明显的「点了没反应」。
+            // 保持挂载后，展开只是改高度，动画立刻能开始。
                 VStack {
                     content()
                 }
@@ -164,7 +179,6 @@ struct MyCard<Content: View>: View {
                 .frame(height: contentHeightLimit, alignment: .top)
                 .clipped()
                 .opacity(showContent ? 1 : 0)
-            }
         }
         .frame(maxWidth: .infinity)
         // 修饰器链收进一个独立的 ViewModifier：
@@ -177,6 +191,8 @@ struct MyCard<Content: View>: View {
             hovered: $hovered,
             showHovered: $showHovered,
             appeared: $appeared,
+            index: index,
+            entranceEnabled: !disableCardAppearAnimation,
             interactionState: interactionState
         ))
         .onAppear {
@@ -184,21 +200,11 @@ struct MyCard<Content: View>: View {
                 appeared = true
                 appearFinished = true
             } else {
-                // 错峰延迟封顶 0.12s（最多按 3 张算）：卡片再多也不该让
-                // 最后一张等半秒才出现，那会被感知成"卡顿"。
-                let delay: Double = Double(min(index, 3)) * 0.04
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) { appeared = true }
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.4) {
+                appeared = true
+                let delay: Double = PageEntrance.delay(for: index)
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay + PageEntrance.duration) {
                     appearFinished = true
                 }
-            }
-
-            folded = initialFolded
-            showContent = !initialFolded
-            if folded {
-                contentHeightLimit = 0
             }
         }
     }
@@ -247,6 +253,8 @@ private struct CardChrome: ViewModifier {
     @Binding var hovered: Bool
     @Binding var showHovered: Bool
     @Binding var appeared: Bool
+    let index: Int
+    let entranceEnabled: Bool
     @ObservedObject var interactionState: CardInteractionState
 
     func body(content: Content) -> some View {
@@ -264,11 +272,23 @@ private struct CardChrome: ViewModifier {
             }
             .background {
                 RoundedRectangle(cornerRadius: 5)
-                    .fill(Color.colorGray8)
-                    .shadow(color: showHovered ? .color3.opacity(0.6) : .black.opacity(0.1), radius: 6)
+                    // PCL2 的卡片底色是 Color.FromArgb(245, 255, 255, 255)：
+                    // 近白、不是灰色。用 colorGray8(#f5f5f5) 在偏蓝的页面底色上
+                    // 会显得发灰、和背景糊在一起。
+                    .fill(Color.white.opacity(245.0 / 255.0))
+                    // 阴影参数对齐 PCL2 的 MyCard + MyDropShadow：
+                    // 半径 3；静止用 ColorObject1（这里的 color1，#343d4a）+ 0.07，
+                    // 悬停换成 ColorObject4（这里的 color4，主题亮色）+ 0.4。
+                    // 之前误用了 color3（主色）和黑色，悬停时边缘的蓝色太浓。
+                    .shadow(
+                        color: showHovered ? Color.color4.opacity(0.4) : Color.color1.opacity(0.07),
+                        radius: 3
+                    )
             }
-            .offset(y: appeared ? 0 : -25)
-            .opacity(appeared ? 1 : 0)
-            .animation(.easeInOut(duration: 0.2), value: showHovered)
+            // 入场动画统一走 PageEntrance（对齐 PCL2 的页面切换动画）。
+            .modifier(PageEntranceShape(progress: appeared ? 1 : 0, enabled: entranceEnabled))
+            .animation(entranceEnabled ? PageEntrance.animation(for: index) : nil, value: appeared)
+            // 悬停的 90ms 与 PCL2 的 MyCard_MouseEnter/MouseLeave 一致。
+            .animation(CardFold.hover, value: showHovered)
     }
 }

@@ -6,48 +6,280 @@
 //
 
 import SwiftUI
+import Foundation
 import Core
 
-/// 设置 → 游戏。
+/// 设置 → 启动。
 ///
-/// Java 运行时管理原先独占一个侧边栏条目（「Java 管理」），现在归到游戏页下：
-/// Java 只服务于启动游戏，当作游戏配置比当作启动器的全局配置更贴合语义。
+/// 排版对齐 PCL2 的 PageSetupLaunch：启动选项 / 内存分配 / 高级选项，末尾是
+/// 「版本独立设置」的入口。标题沿用 PCL2 的叫法，所以「启动」这一页里既有
+/// 游戏侧的启动参数，也有 Java 与垃圾回收器。
 ///
-/// 这里同时放"全局默认启动设置"：实例页里那些标了「跟随全局」的项，
-/// 值就来自这一页。两处必须成对存在，否则用户改不到默认值。
+/// 与 PCL2 的差异只有三类，都是平台原因，不是偷懒：
+/// - 「离线皮肤」整卡不做：本启动器没有皮肤注入通道；
+/// - 高级选项里的 Java Launch Wrapper / LWJGL Unsafe Agent / 使用高性能显卡
+///   是 Windows 专用补丁，macOS 上没有对应物；
+/// - 「启动前进行内存优化」调用的是 Windows 的 EmptyWorkingSet，macOS 没有等价物；
+///   强制回收（purge）需要管理员权限，不适合塞进启动流程。
+///
+/// Java 运行时管理原来独占两张卡，现在按 PCL2 的位置并进「高级选项」。
 struct GameSettingsPage: View {
     @StateObject private var viewModel: JavaSettingsViewModel = .init()
     @ObservedObject private var configObserver: LauncherConfigObserver = .shared
 
+    // 启动选项
     @State private var windowType: GameWindowType = LauncherConfig.shared.gameWindowType
-    @State private var windowTitle: String = LauncherConfig.shared.gameWindowTitle
     @State private var windowWidth: String = String(LauncherConfig.shared.gameWindowWidth)
     @State private var windowHeight: String = String(LauncherConfig.shared.gameWindowHeight)
     @State private var launcherVisibility: LauncherVisibility = LauncherConfig.shared.launcherVisibility
     @State private var processPriority: ProcessPriority = LauncherConfig.shared.processPriority
-    @State private var prelaunchCommand: String = LauncherConfig.shared.prelaunchCommand
-    @State private var prelaunchWait: Bool = LauncherConfig.shared.prelaunchWaitForCompletion
-    @State private var gameArguments: String = LauncherConfig.shared.gameArguments
+
+    // 内存分配
+    @State private var memoryMode: MemoryAllocationMode = LauncherConfig.shared.memoryMode
+    @State private var memorySlider: Double = Double(
+        MemoryAllocation.sliderPosition(forGigabytes: Double(LauncherConfig.shared.memory) / 1024)
+    )
+    /// 自动配置的推荐值与内存条读数都在进页面时算一次。
+    /// 放进 body 会在每次布局时各做一次 syscall（host_statistics64），没必要。
+    @State private var automaticMemoryGB: Double = MemoryAllocation.recommendedGigabytes()
+    @State private var usedMemoryGB: Double = Double(MemoryAllocation.usedBytes) / 1_073_741_824
+    @State private var totalMemoryGB: Double = Double(MemoryAllocation.physicalBytes) / 1_073_741_824
+
+    // 高级选项
     @State private var jvmArguments: String = LauncherConfig.shared.jvmArguments
-    @State private var memory: String = String(LauncherConfig.shared.memory)
-    @State private var memoryOptimize: Bool = LauncherConfig.shared.memoryOptimize
+    @State private var gameArguments: String = LauncherConfig.shared.gameArguments
+    @State private var prelaunchCommand: String = LauncherConfig.shared.prelaunchCommand
+    @State private var garbageCollector: GarbageCollectorMode = LauncherConfig.shared.garbageCollector
+    /// 「还原 JVM 参数」小图标的悬停高亮。
+    @State private var resetHovered: Bool = false
 
     var body: some View {
         CardContainer {
-            javaButtonsCard
-            javaListCard
+            launchOptionsCard
+            memoryCard
                 .cardIndex(1)
-            launchDefaultsCard
+            advancedCard
                 .cardIndex(2)
+        }
+        .onAppear(perform: refreshMemoryReadings)
+    }
+
+    // MARK: - 启动选项
+
+    private var launchOptionsCard: some View {
+        MyCard("启动选项", foldable: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                // 下拉框一律吃满整行：PCL2 的「设置」是两列网格（名称列 Auto、
+                // 控件列 1*），右边缘必须完全对齐，不能各自定宽。
+                SettingRow("启动器可见性", labelWidth: 120) {
+                    MySelect($launcherVisibility, entries: LauncherVisibility.allCases)
+                        .frame(maxWidth: .infinity)
+                        .onChange(of: launcherVisibility) { LauncherConfig.shared.launcherVisibility = $0 }
+                }
+                SettingRow("进程优先级", labelWidth: 120) {
+                    MySelect($processPriority, entries: ProcessPriority.allCases)
+                        .frame(maxWidth: .infinity)
+                        .onChange(of: processPriority) { LauncherConfig.shared.processPriority = $0 }
+                }
+                SettingRow("窗口大小", labelWidth: 120) {
+                    MySelect($windowType, entries: GameWindowType.allCases)
+                        .frame(maxWidth: .infinity)
+                        .onChange(of: windowType) { LauncherConfig.shared.gameWindowType = $0 }
+                    if windowType == .custom {
+                        MyTextField(text: $windowWidth)
+                            .frame(width: 80)
+                            .onChange(of: windowWidth) { newValue in
+                                if let value = Int(newValue) { LauncherConfig.shared.gameWindowWidth = value }
+                            }
+                        MyText("×")
+                        MyTextField(text: $windowHeight)
+                            .frame(width: 80)
+                            .onChange(of: windowHeight) { newValue in
+                                if let value = Int(newValue) { LauncherConfig.shared.gameWindowHeight = value }
+                            }
+                    }
+                }
+                MyTip(text: "窗口相关的 --width / --height / --fullscreen 由这里接管，在「游戏参数」里重复填写不会生效。", theme: .blue)
+            }
+        }
+    }
+
+    // MARK: - 内存分配
+
+    private var memoryCard: some View {
+        MyCard("内存分配", foldable: false) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 20) {
+                    MyComboBox(checked: automaticModeBinding, text: MemoryAllocationMode.automatic.description, allowsUncheck: false)
+                    MyComboBox(checked: customModeBinding, text: MemoryAllocationMode.custom.description, allowsUncheck: false)
+                    Spacer()
+                }
+
+                HStack(spacing: 12) {
+                    MySlider(
+                        value: $memorySlider,
+                        range: 0...Double(MemoryAllocation.maximumSliderPosition),
+                        step: 1
+                    )
+                    .frame(height: 20)
+                    .disabled(memoryMode == .automatic)
+                    .opacity(memoryMode == .automatic ? 0.45 : 1)
+                    .onChange(of: memorySlider) { newValue in
+                        LauncherConfig.shared.memory = MemoryAllocation.megabytes(forSliderPosition: Int(newValue))
+                    }
+                    MyText(String(format: "%.1f GB", effectiveMemoryGB), size: 14)
+                        .frame(width: 72, alignment: .trailing)
+                }
+
+                MemoryBar(
+                    usedGigabytes: usedMemoryGB,
+                    totalGigabytes: totalMemoryGB,
+                    gameGigabytes: effectiveMemoryGB
+                )
+
+                MyText(
+                    memoryMode == .automatic
+                        ? "根据当前可用内存与版本类型自动决定分配量；想自己指定就切到「自定义」。"
+                        : "拖动滑杆调整分配给游戏的内存。低内存区间刻度更细，便于微调。",
+                    size: 12,
+                    color: .colorGray3
+                )
+            }
+        }
+    }
+
+    /// 当前生效的分配量（GB）。
+    private var effectiveMemoryGB: Double {
+        switch memoryMode {
+        case .automatic:
+            return automaticMemoryGB
+        case .custom:
+            return MemoryAllocation.gigabytes(forSliderPosition: Int(memorySlider))
+        }
+    }
+
+    private var automaticModeBinding: Binding<Bool> {
+        Binding(
+            get: { memoryMode == .automatic },
+            set: { isOn in
+                guard isOn else { return }
+                memoryMode = .automatic
+                LauncherConfig.shared.memoryMode = .automatic
+            }
+        )
+    }
+
+    private var customModeBinding: Binding<Bool> {
+        Binding(
+            get: { memoryMode == .custom },
+            set: { isOn in
+                guard isOn else { return }
+                memoryMode = .custom
+                LauncherConfig.shared.memoryMode = .custom
+                LauncherConfig.shared.memory = MemoryAllocation.megabytes(forSliderPosition: Int(memorySlider))
+            }
+        )
+    }
+
+    private func refreshMemoryReadings() {
+        automaticMemoryGB = MemoryAllocation.recommendedGigabytes()
+        usedMemoryGB = Double(MemoryAllocation.usedBytes) / 1_073_741_824
+        totalMemoryGB = Double(MemoryAllocation.physicalBytes) / 1_073_741_824
+    }
+
+    // MARK: - 高级选项
+
+    private var advancedCard: some View {
+        MyCard("高级选项") {
+            VStack(alignment: .leading, spacing: 12) {
+                jvmArgumentsRow
+
+                SettingRow("游戏参数", labelWidth: 140) {
+                    MyTextField(text: $gameArguments, placeholder: "例如 --server example.com")
+                        .onChange(of: gameArguments) { LauncherConfig.shared.gameArguments = $0 }
+                }
+
+                SettingRow("启动前执行命令", labelWidth: 140) {
+                    MyTextField(text: $prelaunchCommand, placeholder: "例如 open -a CleanMyMac")
+                        .onChange(of: prelaunchCommand) { LauncherConfig.shared.prelaunchCommand = $0 }
+                }
+
+                javaSection
+
+                SettingRow("垃圾回收器", labelWidth: 140) {
+                    MySelect($garbageCollector, entries: GarbageCollectorMode.menuOrder)
+                        .frame(maxWidth: .infinity)
+                        .onChange(of: garbageCollector) { LauncherConfig.shared.garbageCollector = $0 }
+                }
+                MyText(garbageCollectorDescription, size: 12, color: .colorGray3)
+                MyTip(
+                    text: "选择具体策略后，会先移除清单与 JVM 参数里的 GC 相关项，再按策略补一套；选「不指定」则完全使用你写的参数。",
+                    theme: .yellow
+                )
+
+                MyTip(text: "版本独立设置里还有更多高级选项可供调整。", theme: .blue)
+                .padding(.top, 2)
+            }
+        }
+    }
+
+    /// JVM 参数行。
+    ///
+    /// PCL2 把「还原」做成标签右侧的小图标按钮（悬停才提示），而不是行尾一颗大按钮：
+    /// 它属于这个输入框的附属操作，放在行尾会把输入框挤窄，也不符合原版的视觉层级。
+    private var jvmArgumentsRow: some View {
+        HStack(alignment: .top, spacing: 20) {
+            HStack(spacing: 4) {
+                MyText("Java 虚拟机参数")
+                Image(.iconRefresh)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 13, height: 13)
+                    .foregroundStyle(resetHovered ? Color.color3 : .color1)
+                    .padding(4)
+                    .contentShape(.rect)
+                    .onHover { resetHovered = $0 }
+                    .onTapGesture(perform: restoreDefaultJVMArguments)
+                    .help("还原默认")
+            }
+            .frame(width: 140, alignment: .leading)
+
+            MyTextArea(text: $jvmArguments, placeholder: "例如 -XX:+AlwaysPreTouch -Dfile.encoding=UTF-8")
+                .onChange(of: jvmArguments) { LauncherConfig.shared.jvmArguments = $0 }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+    }
+
+    private func restoreDefaultJVMArguments() {
+        jvmArguments = LauncherConfig.defaultJVMArguments
+        LauncherConfig.shared.jvmArguments = LauncherConfig.defaultJVMArguments
+        hint("已还原默认 JVM 参数", type: .finish)
+    }
+
+    private var garbageCollectorDescription: String {
+        switch garbageCollector {
+        case .autoZGC:
+            return "Java 21+ 使用分代 ZGC，15–20 使用非分代 ZGC，14 及更早使用 G1GC。ZGC 在回收时不产生长时间停顿，代价是内存占用更高。"
+        case .generationalZGC:
+            return "Java 21+ 使用分代 ZGC，更早的版本回落到 G1GC。"
+        case .g1:
+            return "总是使用 G1GC，附带 Mojang 官方参数。"
+        case .tunedG1:
+            return "总是使用 G1GC，附带 PCL 调优过的参数：内存占用更低，但回收时可能出现短暂卡顿。"
+        case .unspecified:
+            return "不添加任何 GC 参数，完全交给上面的「Java 虚拟机参数」。"
         }
     }
 
     // MARK: - Java
 
-    private var javaButtonsCard: some View {
-        MyCard(nil) {
-            HStack {
-                MyButton("刷新 Java 列表") {
+    private var javaSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                MyText("Java 列表", size: 14)
+                Spacer()
+                MyButton("刷新") {
                     do {
                         try JavaManager.shared.research()
                         hint("刷新成功！", type: .finish)
@@ -56,9 +288,9 @@ struct GameSettingsPage: View {
                         hint("刷新 Java 列表失败：\(error.localizedDescription)", type: .critical)
                     }
                 }
-                .frame(width: 120)
+                .frame(width: 76)
 
-                MyButton("安装 Java") {
+                MyButton("安装") {
                     Task {
                         do {
                             let downloads: [MojangJavaList.JavaDownload] = try await viewModel.javaDownloads()
@@ -75,9 +307,9 @@ struct GameSettingsPage: View {
                         }
                     }
                 }
-                .frame(width: 120)
+                .frame(width: 76)
 
-                MyButton("手动添加 Java") {
+                MyButton("手动添加") {
                     let panel = NSOpenPanel()
                     panel.canChooseFiles = true
                     panel.canChooseDirectories = false
@@ -94,16 +326,9 @@ struct GameSettingsPage: View {
                         }
                     }
                 }
-                .frame(width: 120)
-
-                Spacer()
+                .frame(width: 96)
             }
-            .frame(height: 40)
-        }
-    }
 
-    private var javaListCard: some View {
-        MyCard("Java 列表", folded: false) {
             VStack(spacing: 0) {
                 ForEach(0..<viewModel.javaList.count, id: \.self) { idx in
                     let item = viewModel.javaList[idx]
@@ -136,90 +361,4 @@ struct GameSettingsPage: View {
         }
     }
 
-    // MARK: - 启动默认值
-
-    private var launchDefaultsCard: some View {
-        StaticCard("默认启动设置") {
-            VStack(alignment: .leading, spacing: 10) {
-                MyTip(text: "这些是全局默认值。实例设置里勾选「跟随全局」的项会使用这里的值。", theme: .blue)
-
-                SettingRow("窗口标题", labelWidth: 120) {
-                    MyTextField(text: $windowTitle, placeholder: "留空则使用游戏自身标题")
-                        .onChange(of: windowTitle) { LauncherConfig.shared.gameWindowTitle = $0 }
-                    if !GameWindowTitle.isTrusted {
-                        MyButton("授权") {
-                            GameWindowTitle.requestPermission()
-                            hint("请在「系统设置 → 隐私与安全性 → 辅助功能」中允许 PCL.Swift，然后重启启动器。", type: .info)
-                        }
-                        .frame(width: 80)
-                    }
-                }
-                if !GameWindowTitle.isTrusted {
-                    MyTip(text: "修改游戏窗口标题需要「辅助功能」权限。未授权时这个设置不会生效，游戏会显示自己的默认标题。", theme: .yellow)
-                }
-                SettingRow("窗口模式", labelWidth: 120) {
-                    MySelect($windowType, entries: GameWindowType.allCases)
-                        .frame(width: 150)
-                        .onChange(of: windowType) { LauncherConfig.shared.gameWindowType = $0 }
-                }
-                if windowType == .custom {
-                    SettingRow("窗口大小", labelWidth: 120) {
-                        MyTextField(text: $windowWidth)
-                            .frame(width: 80)
-                            .onChange(of: windowWidth) { newValue in
-                                if let value = Int(newValue) { LauncherConfig.shared.gameWindowWidth = value }
-                            }
-                        MyText("×")
-                        MyTextField(text: $windowHeight)
-                            .frame(width: 80)
-                            .onChange(of: windowHeight) { newValue in
-                                if let value = Int(newValue) { LauncherConfig.shared.gameWindowHeight = value }
-                            }
-                    }
-                }
-                SettingRow("启动器可见性", labelWidth: 120) {
-                    MySelect($launcherVisibility, entries: LauncherVisibility.allCases)
-                        .frame(width: 200)
-                        .onChange(of: launcherVisibility) { LauncherConfig.shared.launcherVisibility = $0 }
-                }
-                SettingRow("进程优先级", labelWidth: 120) {
-                    MySelect($processPriority, entries: ProcessPriority.allCases)
-                        .frame(width: 120)
-                        .onChange(of: processPriority) { LauncherConfig.shared.processPriority = $0 }
-                }
-                SettingRow("启动前执行命令", labelWidth: 120) {
-                    MyTextField(text: $prelaunchCommand, placeholder: "例如 open -a CleanMyMac")
-                        .onChange(of: prelaunchCommand) { LauncherConfig.shared.prelaunchCommand = $0 }
-                }
-                SettingRow("等待命令完成", labelWidth: 120) {
-                    MyComboBox(checked: $prelaunchWait, text: "命令执行完成后才继续启动")
-                        .onChange(of: prelaunchWait) { LauncherConfig.shared.prelaunchWaitForCompletion = $0 }
-                    Spacer(minLength: 0)
-                }
-                SettingRow("内存优化", labelWidth: 120) {
-                    MyComboBox(checked: $memoryOptimize, text: "启动游戏前进行内存优化")
-                        .onChange(of: memoryOptimize) { LauncherConfig.shared.memoryOptimize = $0 }
-                    Spacer(minLength: 0)
-                }
-                SettingRow("默认内存", labelWidth: 120) {
-                    MyTextField(text: $memory)
-                        .frame(width: 120)
-                        .onChange(of: memory) { newValue in
-                            if let value = UInt64(newValue) { LauncherConfig.shared.memory = value }
-                        }
-                    MyText("MB", size: 12, color: .colorGray3)
-                }
-                SettingRow("附加游戏参数", labelWidth: 120) {
-                    MyTextField(text: $gameArguments, placeholder: "例如 --server example.com")
-                        .onChange(of: gameArguments) { LauncherConfig.shared.gameArguments = $0 }
-                }
-                SettingRow("额外 JVM 参数", labelWidth: 120) {
-                    MyTextField(text: $jvmArguments, placeholder: "例如 -XX:+UseG1GC")
-                        .onChange(of: jvmArguments) { LauncherConfig.shared.jvmArguments = $0 }
-                }
-
-                MyTip(text: "窗口相关的 --width / --height / --fullscreen 由「窗口模式」接管，在参数里重复填写不会生效。", theme: .yellow)
-            }
-        }
-    }
 }

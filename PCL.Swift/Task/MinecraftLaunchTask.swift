@@ -30,8 +30,8 @@ public enum MinecraftLaunchTask {
             .init(0, "检查 Java", checkJava(task:model:)),
             .init(1, "刷新账号", refreshAccount(task:model:)),
             .init(2, "预检查", precheck(task:model:)),
-            .init(3, "执行启动前命令", runPrelaunchCommand(task:model:)),
-            .init(4, "内存优化", display: false, optimizeMemory(task:model:)),
+            .init(3, "应用游戏设置", applyGameOptions(task:model:)),
+            .init(4, "执行启动前命令", runPrelaunchCommand(task:model:)),
             .init(5, "检查资源完整性", checkResources(task:model:)),
             .init(6, "检查 Authlib Injector", checkAuthlibInjector(task:model:)),
             .init(7, "启动游戏", launch(task:model:)),
@@ -39,6 +39,39 @@ public enum MinecraftLaunchTask {
         )
     }
     
+    /// 数一下实例 mods 目录里的 Mod，供「自动配置」的内存估算使用。
+    ///
+    /// 数不出来就当 0：这只影响自动配置给的初始值，不该让启动流程因此失败。
+    private static func modCount(of instance: MinecraftInstance) -> Int {
+        let modsURL: URL = instance.url.appending(path: "mods")
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: modsURL.path) else {
+            return 0
+        }
+        return files.filter {
+            ["jar", "zip", "litemod"].contains(($0 as NSString).pathExtension.lowercased())
+        }.count
+    }
+
+    /// 启动前把游戏语言设成中文（辅助功能开关）。
+    ///
+    /// 只改 options.txt 的 lang 一行，而且只在玩家没动过语言或还没有存档时改；
+    /// 写失败只记日志——语言是个便利项，不该因此拦住启动。
+    private static func applyGameOptions(task: SubTask, model: Model) async throws {
+        guard LauncherConfig.shared.autoSetGameLanguage else {
+            log("已关闭「自动设置为中文」，跳过游戏语言设置")
+            return
+        }
+        // 1.10 及更早的版本要求 zh_CN（后两位大写），1.11 起改用 zh_cn，
+        // 写错大小写会让老版本直接 NPE 或回退英文。
+        let language: String = model.instance.version < .init("1.11") ? "zh_CN" : "zh_cn"
+        do {
+            let changed: Bool = try GameOptions.setLanguage(language, at: model.instance.url, onlyWhenUntouched: true)
+            log(changed ? "已将游戏语言设置为 \(language)" : "游戏语言已是 \(language)，无需修改")
+        } catch {
+            warn("写入游戏语言失败：\(error.localizedDescription)")
+        }
+    }
+
     private static func checkJava(task: SubTask, model: Model) async throws {
         var javaRuntime: JavaRuntime? = model.instance.config.javaURL.flatMap { try? JavaSearcher.load(from: $0) }
         let minMajorVersion = model.instance.manifest.javaVersion.majorVersion
@@ -60,7 +93,11 @@ public enum MinecraftLaunchTask {
                 .yes(label: "安装")
             ) == 1 {
                 await AppRouter.shared.setRoot(.settings)
-                await AppRouter.shared.append(.gameSettings)
+                // 设置页的默认子页就是「启动」（原「游戏」页）；显式 append 是为了
+                // 将来默认子页变了也能落在这里，但不能叠出一层同名路由。
+                if await AppRouter.shared.last != .gameSettings {
+                    await AppRouter.shared.append(.gameSettings)
+                }
             }
             try task.cancel()
             return
@@ -132,6 +169,9 @@ public enum MinecraftLaunchTask {
             model.instance.config.javaURL = javaRuntime.executableURL
             model.instance.markDirty()
             model.options.javaRuntime = javaRuntime
+            // GC 参数按 Java 大版本分档（ZGC 需要 15+，分代 ZGC 需要 21+），
+            // 必须等这里选定 Java 之后再写。
+            model.options.javaMajorVersion = javaRuntime.majorVersion
             model.manifest = NativesMapper.map(model.manifest, to: javaRuntime.architecture)
         } else {
             warn("javaRuntime 未被设置，但启动任务没有被取消")
@@ -249,10 +289,7 @@ public enum MinecraftLaunchTask {
         let command: String = model.settings.prelaunchCommand
         guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         do {
-            try await PrelaunchCommand.run(
-                command,
-                wait: model.settings.prelaunchWaitForCompletion
-            ) { text in
+            try await PrelaunchCommand.run(command) { text in
                 log("启动前命令输出：\(text.trimmingCharacters(in: .newlines))")
             }
         } catch {
@@ -268,24 +305,6 @@ public enum MinecraftLaunchTask {
                 try task.cancel()
             }
         }
-    }
-
-    /// 启动前内存优化。
-    ///
-    /// macOS 上没有 Windows 那种"清空工作集"的接口，能做的是：
-    /// 把本启动器自己占用的缓存释放掉（解码过的图片、资源列表、版本清单），
-    /// 再让系统回收一次闲置页。收益有限，所以默认关闭。
-    private static func optimizeMemory(task: SubTask, model: Model) async throws {
-        guard model.settings.memoryOptimize else { return }
-        log("正在执行启动前内存优化")
-        await MainActor.run {
-            // 资源列表与图标缓存是启动器里最大的一块常驻内存。
-            ResourceCache.shared.releaseIcons()
-        }
-        // 让系统回收本进程的闲置页；对游戏进程没有直接影响，
-        // 但能减少启动器在后台与游戏抢内存的概率。
-        autoreleasepool { }
-        log("内存优化完成")
     }
 
     private static func checkResources(task: SubTask, model: Model) async throws {
@@ -397,10 +416,6 @@ public enum MinecraftLaunchTask {
                     break
                 }
                 if checkWindows(for: process) {
-                    // 窗口出现后再改名：更早调用时 AX 还读不到窗口列表。
-                    if let title = model.options.windowTitle {
-                        GameWindowTitle.apply(title: title, to: process.processIdentifier)
-                    }
                     break
                 }
                 try await Task.sleep(seconds: 1)
@@ -443,7 +458,11 @@ public enum MinecraftLaunchTask {
             self.onProcessStarted = onProcessStarted
             self.manifest = instance.manifest
             self.options = .init()
-            let settings: ResolvedLaunchSettings = .resolve(instance: instance.config)
+            let settings: ResolvedLaunchSettings = .resolve(
+                instance: instance.config,
+                modCount: MinecraftLaunchTask.modCount(of: instance),
+                modable: instance.modLoader != nil
+            )
             self.settings = settings
 
             self.options.profile = account.profile
@@ -452,11 +471,13 @@ public enum MinecraftLaunchTask {
             self.options.memory = settings.memory
             self.options.extraJvmArguments = settings.jvmArguments
             self.options.extraGameArguments = settings.gameArguments
-            self.options.windowTitle = settings.windowTitle.isEmpty ? nil : settings.windowTitle
             self.options.windowType = settings.windowType
             self.options.windowWidth = settings.windowWidth
             self.options.windowHeight = settings.windowHeight
             self.options.processPriority = settings.processPriority
+            self.options.garbageCollector = settings.garbageCollector
+            // 关闭版本隔离时，存档 / Mod / options.txt 全部落到仓库根目录。
+            self.options.gameDirectory = instance.config.isolation == false ? repository.url : nil
         }
     }
 }

@@ -197,8 +197,10 @@ struct MultiplayerPage: View {
                         .fixedSize(horizontal: true, vertical: false)
                         .frame(maxHeight: .infinity)
                     }
+                    .cardIndex(1)
                     .fixedSize(horizontal: true, vertical: false)
                     PlayerListView(room: room)
+                        .cardIndex(2)
                         .frame(maxHeight: .infinity)
                 }
             }

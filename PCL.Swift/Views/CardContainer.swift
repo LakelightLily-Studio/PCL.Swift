@@ -24,11 +24,12 @@ struct CardContainer<Content: View>: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
+            // 间距与内边距对齐 PCL2 的 MyPageRight：卡片之间 15、内容区四周 25。
+            VStack(spacing: 15) {
                 content()
             }
             .frame(maxWidth: .infinity)
-            .padding(24)
+            .padding(25)
         }
         .environmentObject(CardInteractionState.shared)
     }

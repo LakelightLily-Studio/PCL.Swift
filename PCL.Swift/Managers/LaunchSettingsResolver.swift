@@ -14,43 +14,60 @@ import Core
 
 /// 一次启动最终生效的设置。所有字段都已解析成确定值。
 struct ResolvedLaunchSettings {
-    let windowTitle: String
     let windowType: GameWindowType
     let windowWidth: Int
     let windowHeight: Int
     let launcherVisibility: LauncherVisibility
     let processPriority: ProcessPriority
     let prelaunchCommand: String
-    let prelaunchWaitForCompletion: Bool
     let gameArguments: [String]
     let jvmArguments: [String]
     let memory: UInt64
-    let memoryOptimize: Bool
+    let garbageCollector: GarbageCollectorMode
 
     /// 合并实例覆盖值与全局默认值。
     /// - Parameters:
     ///   - config: 实例配置。
     ///   - global: 全局配置。
-    static func resolve(instance config: MinecraftInstance.Config, global: LauncherConfig = .shared) -> ResolvedLaunchSettings {
+    ///   - modCount: 该实例 mods 目录下的 Mod 数量，只在全局选「自动配置」时参与计算。
+    ///   - modable: 该实例是否可安装 Mod（决定自动配置按哪档目标值算）。
+    static func resolve(
+        instance config: MinecraftInstance.Config,
+        global: LauncherConfig = .shared,
+        modCount: Int = 0,
+        modable: Bool = false
+    ) -> ResolvedLaunchSettings {
         // 实例上没写 JVM 参数时用全局的；写了就完全替换（不做拼接，
         // 否则用户没法"删掉"全局参数里的某一项）。
         let jvmArguments: [String] = config.jvmArguments.isEmpty
             ? global.jvmArguments.splitToArguments()
             : config.jvmArguments
 
+        // 内存分配：实例选「自动配置」就按这个实例的 Mod 量现算，选「自定义」用实例值，
+        // 什么都没选（nil）时跟随全局的「内存分配」。
+        let memory: UInt64
+        switch config.memoryMode {
+        case .automatic:
+            let gigabytes: Double = MemoryAllocation.recommendedGigabytes(modCount: modCount, modable: modable)
+            memory = UInt64((gigabytes * 1024).rounded())
+        case .custom:
+            memory = config.jvmHeapSize ?? global.resolvedMemoryMB(modCount: modCount, modable: modable)
+        case .none:
+            memory = global.resolvedMemoryMB(modCount: modCount, modable: modable)
+        }
+
         return .init(
-            windowTitle: config.gameWindowTitle ?? global.gameWindowTitle,
             windowType: config.gameWindowType ?? global.gameWindowType,
             windowWidth: config.gameWindowWidth ?? global.gameWindowWidth,
             windowHeight: config.gameWindowHeight ?? global.gameWindowHeight,
             launcherVisibility: config.launcherVisibility ?? global.launcherVisibility,
             processPriority: config.processPriority ?? global.processPriority,
             prelaunchCommand: config.prelaunchCommand ?? global.prelaunchCommand,
-            prelaunchWaitForCompletion: config.prelaunchWaitForCompletion ?? global.prelaunchWaitForCompletion,
             gameArguments: config.gameArguments ?? global.gameArguments.splitToArguments(),
             jvmArguments: jvmArguments,
-            memory: config.jvmHeapSize,
-            memoryOptimize: config.memoryOptimize ?? global.memoryOptimize
+            memory: memory,
+            // 实例可以单独覆盖 GC；没设过就跟随全局。
+            garbageCollector: config.garbageCollector ?? global.garbageCollector
         )
     }
 }
@@ -65,12 +82,10 @@ enum PrelaunchCommand {
     ///
     /// - Parameters:
     ///   - command: 待执行的命令。空白字符串直接返回。
-    ///   - wait: 是否等待命令结束。
     ///   - outputHandler: 标准输出与标准错误的内容回调。
     /// - Throws: 命令以非零状态退出时抛出。
     static func run(
         _ command: String,
-        wait: Bool,
         outputHandler: (@MainActor (String) -> Void)? = nil
     ) async throws {
         let trimmed: String = command.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -99,15 +114,11 @@ enum PrelaunchCommand {
             }
         }
 
-        if wait {
-            process.waitUntilExit()
-            await readingTask.value
-            guard process.terminationStatus == 0 else {
-                throw SimpleError("启动前命令以状态码 \(process.terminationStatus) 退出。")
-            }
-            log("启动前命令执行完成")
-        } else {
-            log("启动前命令已执行，不等待其结束")
+        process.waitUntilExit()
+        await readingTask.value
+        guard process.terminationStatus == 0 else {
+            throw SimpleError("启动前命令以状态码 \(process.terminationStatus) 退出。")
         }
+        log("启动前命令执行完成")
     }
 }
