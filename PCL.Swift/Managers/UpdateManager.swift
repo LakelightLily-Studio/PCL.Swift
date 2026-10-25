@@ -19,9 +19,6 @@ class UpdateManager {
 
     /// 更新来源仓库。
     fileprivate static let repository: String = "functy23/PCL.Swift"
-    /// 能直接替换 App Bundle 的资产前缀：发布页里还有 dmg 与 build.xcarchive.zip，
-    /// 只有 PCL.Swift-<版本>.zip 是更新器认得的包。
-    fileprivate static let artifactPrefix: String = "PCL.Swift-"
     /// 一次取多少条 Release。20 条足够覆盖落后很多个版本的用户。
     private static let releasesPerPage: Int = 20
 
@@ -54,7 +51,7 @@ class UpdateManager {
         for release in candidates where LauncherVersion.isNewer(release.tagName, than: Metadata.appVersion) {
             // 某个版本没带可用的 zip 时跳过它，继续看下一个更旧的版本，
             // 而不是把用户卡在一个装不上的版本上。
-            if let info: UpdateInfo = release.updateInfo {
+            if let info: UpdateInfo = release.updateInfo(for: .systemArchitecture()) {
                 return info
             }
         }
@@ -107,10 +104,10 @@ class UpdateManager {
 private extension GitHubRelease {
     /// 更新包：发布页里还有 dmg 与 build.xcarchive.zip，只有 PCL.Swift-<版本>.zip
     /// 是能直接替换 App Bundle 的那种，所以按前缀 + 后缀筛，不按顺序猜。
-    var updateInfo: UpdateInfo? {
-        guard let asset: Asset = assets.first(where: {
-            $0.name.hasPrefix(UpdateManager.artifactPrefix) && $0.name.hasSuffix(".zip")
-        }) else { return nil }
+    /// - Parameter architecture: 当前运行的架构。更新包从 2.0.4 起按架构分开，
+    ///   挑包逻辑在 Core 的 GitHubRelease.updateArchive(for:)，这里只做映射。
+    func updateInfo(for architecture: Architecture) -> UpdateInfo? {
+        guard let asset: Asset = updateArchive(for: architecture) else { return nil }
 
         let trimmedName: String = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return .init(
