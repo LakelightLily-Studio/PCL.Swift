@@ -48,10 +48,19 @@ jobs:
         run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
 
       - name: Generate Secrets.properties
+        env:
+          CURSE_FORGE_API_KEY: ${{ secrets.CURSE_FORGE_API_KEY }}
         run: |
-          cat > ./Resources/Secrets.properties <<'EOF'
-          CURSE_FORGE_API_KEY=${{ secrets.CURSE_FORGE_API_KEY }}
-          EOF
+          # 仓库里的 Secrets.properties 只是模板。没配 secret 时不要写出
+          # "CURSE_FORGE_API_KEY="（空值）这种行：PropertiesLoader 以前会因此
+          # 让整份文件解析失败，表现为"所有 Key 都没了"（Issue #4）。
+          if [ -n "$CURSE_FORGE_API_KEY" ]; then
+            printf 'CURSE_FORGE_API_KEY=%s\n' "$CURSE_FORGE_API_KEY" > ./Resources/Secrets.properties
+            echo "CurseForge API Key: 已注入"
+          else
+            echo "::warning title=缺少 CURSE_FORGE_API_KEY::仓库 secret 未配置，打出来的 App 不含 CurseForge API Key，CurseForge 整合包将无法导入（用户仍可在 设置 → 其他 → 社区资源 手填）。"
+            : > ./Resources/Secrets.properties
+          fi
 
       - name: Import codesign cert
         if: ${{ inputs.build_configuration == 'Release' }}
