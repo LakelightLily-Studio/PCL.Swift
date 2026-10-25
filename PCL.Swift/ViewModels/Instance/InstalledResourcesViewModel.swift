@@ -49,7 +49,7 @@ class InstalledResourcesViewModel: ObservableObject {
         self.currentRepositoryId = instanceManager.currentRepositoryId
         self.service = .init(
             preferredType: type,
-            remoteLookupService: .init(curseforgeClient: .init(apiKey: Secrets.shared.curseforgeApiKey ?? "")),
+            remoteLookupService: .init(curseforgeClient: Secrets.shared.curseforgeClient),
             cache: .shared
         )
 

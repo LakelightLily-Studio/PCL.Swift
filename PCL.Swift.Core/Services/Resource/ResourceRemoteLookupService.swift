@@ -9,9 +9,11 @@ import Foundation
 
 public class ResourceRemoteLookupService {
     private let modrinthClient: ModrinthAPIClient
-    private let curseforgeClient: CurseForgeAPIClient
+    /// CurseForge 客户端。没有可用 Key 时为 nil —— 传一个空 Key 的客户端只会换来 401，
+    /// 于排查无益，所以宁可显式缺省，让调用方走「没有 Key」的分支。
+    private let curseforgeClient: CurseForgeAPIClient?
     
-    public init(modrinthClient: ModrinthAPIClient = .shared, curseforgeClient: CurseForgeAPIClient) {
+    public init(modrinthClient: ModrinthAPIClient = .shared, curseforgeClient: CurseForgeAPIClient? = nil) {
         self.modrinthClient = modrinthClient
         self.curseforgeClient = curseforgeClient
     }

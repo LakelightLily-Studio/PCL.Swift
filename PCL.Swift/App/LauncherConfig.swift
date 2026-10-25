@@ -162,6 +162,17 @@ class LauncherConfig: Codable {
         didSet { LauncherConfig.markDirty() }
     }
 
+    // MARK: - 社区资源
+
+    /// 用户手填的 CurseForge API Key。空串表示跟随内置 Key（Secrets.properties）。
+    ///
+    /// 存明文：这个 Key 本身就是"调用方凭据"，CurseForge 没有可替代的匿名接口，
+    /// 也没有可以加密后存放的密钥来源。它只留在本机 config.json 里，
+    /// 并且不在设置导出的白名单里（SettingsTransferService 白名单不含凭据）。
+    public var curseforgeApiKey: String = "" {
+        didSet { LauncherConfig.markDirty() }
+    }
+
     // MARK: - 外观
 
     /// 标题栏 Logo 类型。
@@ -299,6 +310,7 @@ class LauncherConfig: Codable {
         self.separatesVersionListSource = try container.decodeIfPresent(Bool.self, forKey: .separatesVersionListSource) ?? false
         self.versionListSourcePolicy = try container.decodeIfPresent(DownloadSourcePolicy.self, forKey: .versionListSourcePolicy) ?? .officialFirst
         self.customCacheDirectory = try container.decodeIfPresent(URL.self, forKey: .customCacheDirectory)
+        self.curseforgeApiKey = try container.decodeIfPresent(String.self, forKey: .curseforgeApiKey) ?? ""
 
         self.titleBarLogoType = (try? container.decodeIfPresent(TitleBarLogoType.self, forKey: .titleBarLogoType)) ?? .logo
         self.titleBarText = try container.decodeIfPresent(String.self, forKey: .titleBarText) ?? "PCL.Swift"
@@ -350,6 +362,7 @@ class LauncherConfig: Codable {
         try container.encode(separatesVersionListSource, forKey: .separatesVersionListSource)
         try container.encode(versionListSourcePolicy, forKey: .versionListSourcePolicy)
         try container.encodeIfPresent(customCacheDirectory, forKey: .customCacheDirectory)
+        try container.encode(curseforgeApiKey, forKey: .curseforgeApiKey)
 
         try container.encode(titleBarLogoType, forKey: .titleBarLogoType)
         try container.encode(titleBarText, forKey: .titleBarText)
@@ -436,6 +449,7 @@ class LauncherConfig: Codable {
         case separatesVersionListSource
         case versionListSourcePolicy
         case customCacheDirectory
+        case curseforgeApiKey
         case titleBarLogoType
         case titleBarText
         case titleBarImageURL

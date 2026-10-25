@@ -13,8 +13,10 @@ import Core
 /// 卡片与行序按 PCL2 的 PageSetupSystem 排：下载 / 社区资源 / 辅助功能 / 启动器。
 /// 按要求不做「调试选项」整卡。
 ///
-/// 还没有实现的能力（CurseForge 源、文件名格式、Mod 管理样式、游戏更新提示）
+/// 还没有实现的能力（CurseForge 浏览源、文件名格式、Mod 管理样式、游戏更新提示）
 /// 保留原版的行，但控件不可交互——放活的开关只会变成点了没反应。
+/// CurseForge API Key 是例外：它是「导入 CurseForge 整合包」的必要条件，
+/// 所以这一行是真的输入框（Issue #4）。
 struct LauncherSettingsPage: View {
     @ObservedObject private var configObserver: LauncherConfigObserver = .shared
     @State private var downloadSourcePolicy: DownloadSourcePolicy = LauncherConfig.shared.downloadSourcePolicy
@@ -28,6 +30,9 @@ struct LauncherSettingsPage: View {
     )
     @State private var updatePrompt: UpdatePromptMode = LauncherConfig.shared.ignoreLauncherUpdates ? .off : .notify
     @State private var autoSetGameLanguage: Bool = LauncherConfig.shared.autoSetGameLanguage
+    /// 手填的 CurseForge API Key。空串表示跟随内置 Key。
+    @State private var curseforgeApiKey: String = LauncherConfig.shared.curseforgeApiKey
+    @State private var testingCurseforgeKey: Bool = false
 
     var body: some View {
         CardContainer {
@@ -111,21 +116,76 @@ struct LauncherSettingsPage: View {
         }
     }
 
-    // MARK: - 社区资源（占位）
+    // MARK: - 社区资源
 
     private var communityCard: some View {
         MyCard("社区资源", foldable: false) {
             VStack(alignment: .leading, spacing: 10) {
-                SettingRow("来源", labelWidth: 120) {
+                // 这一行是真的：CurseForge 的接口要求每个调用方自带 Key，
+                // 内置 Key 缺失或失效时（Issue #4），用户在这里填一个就能立刻导入整合包，
+                // 不必等启动器发版，也不必去改环境变量。
+                SettingRow("CurseForge API Key", labelWidth: 140, verticalPadding: 2) {
+                    MyTextField(text: $curseforgeApiKey, placeholder: "留空则使用内置 Key", secure: true)
+                        .onChange(of: curseforgeApiKey) { newValue in
+                            LauncherConfig.shared.curseforgeApiKey = newValue
+                            // 下载请求头用的是 DownloadSourceManager 里的那份副本，
+                            // 不同步的话要等下次启动才生效。
+                            DownloadSourceManager.shared.updateCurseforgeAPIKey(Secrets.shared.curseforgeApiKey)
+                            configObserver.touch()
+                        }
+                    MyButton(testingCurseforgeKey ? "测试中…" : "测试", disabled: testingCurseforgeKey) {
+                        testCurseforgeKey()
+                    }
+                    .frame(width: 88)
+                }
+                SettingRow("来源", labelWidth: 140) {
                     placeholderText("尽量使用官方源")
                 }
-                SettingRow("文件名格式", labelWidth: 120) {
+                SettingRow("文件名格式", labelWidth: 140) {
                     placeholderText("[译名] create-1.21.1-6.0.4")
                 }
-                SettingRow("Mod 管理样式", labelWidth: 120) {
+                SettingRow("Mod 管理样式", labelWidth: 140) {
                     placeholderText("标题显示译名，详情显示文件名")
                 }
-                MyTip(text: "占位：本启动器的资源下载目前只接入了 Modrinth，还没有 CurseForge 源、文件重命名与 Mod 译名，实现后这三行会换成真实控件。", theme: .yellow)
+                MyTip(text: curseforgeKeyTip, theme: curseforgeKeyTipTheme)
+                MyTip(text: "占位：资源下载目前只接入了 Modrinth，「来源」「文件名格式」「Mod 管理样式」三行还没有对应的实现，实现后会换成真实控件。", theme: .yellow)
+            }
+        }
+    }
+
+    /// Key 的当前状态：没有可用 Key 时要说清后果，而不是等用户去踩导入失败。
+    private var curseforgeKeyTip: String {
+        let status: String
+        if Secrets.shared.curseforgeApiKey == nil {
+            status = "当前没有可用的 CurseForge API Key：CurseForge 格式（内含 manifest.json）的整合包无法导入。"
+        } else if CurseforgeAPIKeyResolver.normalized(LauncherConfig.shared.curseforgeApiKey) == nil {
+            status = "当前使用启动器内置的 CurseForge API Key。"
+        } else {
+            status = "当前使用你填写的 CurseForge API Key。"
+        }
+        return status + "\n\nKey 可在 CurseForge 官网的 API 申请页免费获取，填写后立刻生效；清空则回退到内置 Key。"
+    }
+
+    private var curseforgeKeyTipTheme: MyTip.Theme {
+        Secrets.shared.curseforgeApiKey == nil ? .yellow : .blue
+    }
+
+    /// 拿一个必定存在的项目（JEI，id 238222）探一下 Key 是否被服务端接受。
+    private func testCurseforgeKey() {
+        guard !testingCurseforgeKey else { return }
+        guard let client: CurseForgeAPIClient = Secrets.shared.curseforgeClient else {
+            hint("还没有可用的 CurseForge API Key，请先在左侧输入框填写。", type: .critical)
+            return
+        }
+        testingCurseforgeKey = true
+        Task {
+            defer { testingCurseforgeKey = false }
+            do {
+                _ = try await client.mod(id: 238222)
+                hint("CurseForge API Key 有效！", type: .finish)
+            } catch {
+                err("测试 CurseForge API Key 失败：\(error.localizedDescription)")
+                hint("CurseForge API Key 无效：\(error.localizedDescription)", type: .critical)
             }
         }
     }

@@ -17,7 +17,7 @@ enum FileDropHandler {
         }
         
         let resourceLoadService = ResourceLoadService(
-            remoteLookupService: .init(curseforgeClient: .init(apiKey: Secrets.shared.curseforgeApiKey ?? "")),
+            remoteLookupService: .init(curseforgeClient: Secrets.shared.curseforgeClient),
             cache: .shared
         )
         if let resource = try? await resourceLoadService.load(at: url) {

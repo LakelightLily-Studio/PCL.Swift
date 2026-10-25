@@ -22,10 +22,10 @@ class ModpackViewModel: ObservableObject {
         // 原先这里无条件 guard，导致没有配置 Key 的构建连 Modrinth / .mrpack /
         // 普通压缩包都导不进来（Issue #2：不能导入整合包）。现在把「有没有 Key」
         // 交给服务层判断：只有真的碰到 manifest.json（CurseForge 格式）时才报错。
-        let curseforgeClient: CurseForgeAPIClient? = Secrets.shared.curseforgeApiKey.map {
-            .init(apiKey: $0)
-        }
-        let service = ModpackImportService(curseforgeClient: curseforgeClient, modpackURL: url)
+        //
+        // Issue #4：没有 Key 时不能拿空字符串造客户端再让请求 401 回来，
+        // 那样用户看到的错误与真正原因无关。Secrets 只在真有 Key 时给出客户端。
+        let service = ModpackImportService(curseforgeClient: Secrets.shared.curseforgeClient, modpackURL: url)
         
         let handleUnknownError: (Error) -> Void = { (error: Error) in
             MessageBoxManager.shared.showText(
@@ -79,11 +79,22 @@ class ModpackViewModel: ObservableObject {
                     level: .error
                 )
             case .missingCurseforgeClient:
+                // 以前这里只说「从官方渠道重新下载」，用户没有任何可执行的动作
+                // （Issue #4 的截图就是这条）。现在直接给一个能跳到设置页的按钮：
+                // 手填的 Key 会立刻生效，不必重启，也不必等新版发布。
                 MessageBoxManager.shared.showText(
                     title: "缺少 CurseForge API Key",
-                    content: "这个整合包使用 CurseForge 格式（内含 manifest.json），需要 CurseForge API Key 才能解析。\n\n请从官方渠道重新下载 PCL.Swift，或设置环境变量 PCLMAC_CURSE_FORGE_API_KEY 后重启启动器。",
-                    level: .error
-                )
+                    content: "这个整合包使用 CurseForge 格式（内含 manifest.json），解析它必须带 CurseForge API Key。\n\n请到 设置 → 其他 → 社区资源 填入自己的 Key（可在 CurseForge 官网免费申请），或设置环境变量 PCLMAC_CURSE_FORGE_API_KEY 后重启启动器。",
+                    level: .error,
+                    .no(),
+                    .yes(label: "去设置", type: .highlight)
+                ) { button in
+                    guard button == 1 else { return }
+                    // 直接把路由切到「设置 → 其他」：那里有可以手填 Key 的输入框。
+                    let router: AppRouter = .shared
+                    router.setRoot(.settings)
+                    router.replaceLast(.launcherSettings)
+                }
             case .unknownFormat:
                 MessageBoxManager.shared.showText(
                     title: "不支持的整合包格式",

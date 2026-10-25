@@ -73,6 +73,14 @@ public class DownloadSourceManager {
         officialSource.curseforgeApiKey = curseforgeApiKey
     }
 
+    /// 更新 CurseForge API Key。
+    ///
+    /// Key 只影响发往 edge.forgecdn.net 的请求头，用户在设置里改了之后
+    /// 不需要重建整个管理器；但必须真的调到，否则下一次下载仍用旧 Key。
+    public func updateCurseforgeAPIKey(_ key: String?) {
+        officialSource.curseforgeApiKey = key
+    }
+
     /// 版本列表专用策略。
     ///
     /// 未开启"分开设置"时跟随文件下载源，这样只有老字段的配置行为不变。
