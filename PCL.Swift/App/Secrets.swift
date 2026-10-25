@@ -20,14 +20,10 @@ struct Secrets {
 
     /// 当前生效的 CurseForge API Key。
     ///
-    /// 顺序：设置 → 其他 → 社区资源 里手填的 Key → 内置 Key。手填框留空表示
-    /// 「跟随内置 Key」，所以空白串一律按「没填」处理。解析规则在 Core 的
-    /// CurseforgeAPIKeyResolver 里，这里只负责把数据喂进去。
+    /// 只有内置这一层：Key 由构建时注入，用户不再需要（也不允许）手填。
+    /// 空白串一律按「没有」处理，免得拿空 Key 去请求——那样只会得到 401。
     public var curseforgeApiKey: String? {
-        CurseforgeAPIKeyResolver.resolve(
-            userProvided: LauncherConfig.shared.curseforgeApiKey,
-            bundled: bundledCurseforgeApiKey
-        )
+        bundledCurseforgeApiKey
     }
 
     /// 按当前 Key 构造客户端。没有可用 Key 时返回 nil，让调用方走「缺少 Key」的分支，
@@ -53,7 +49,7 @@ struct Secrets {
             // 只记"有没有"，不记内容：日志是用户会随手贴出来的东西。
             log("已加载 CurseForge API Key")
         } else {
-            warn("没有可用的 CurseForge API Key：CurseForge 整合包导入会失败，可在 设置 → 其他 → 社区资源 中手动填写。")
+            warn("没有可用的 CurseForge API Key：CurseForge 格式的整合包无法导入，请更新到内置了 Key 的版本。")
         }
     }
 

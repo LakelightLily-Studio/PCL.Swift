@@ -7,22 +7,20 @@ import Foundation
 
 /// 决定「这一次该用哪个 CurseForge API Key」。
 ///
-/// CurseForge 的接口要求每个调用方自带 Key，而 Key 的来源有好几层：
-/// 用户在设置里手填的、打包进 App 的（CI 注入的 Secrets.properties）、
-/// 以及本地开发用的环境变量。层级一旦分散到各处的空字符串兜底里就会漂移——
-/// 之前正是这样在没配 Key 的构建里造出了「空 Key」客户端，请求一律 401/403，
-/// 用户看到的却是另一套文案（Issue #4）。
+/// CurseForge 的接口要求每个调用方自带 Key。Key 只有内置一层（打包进 App 的
+/// Secrets.properties 或本地开发用的环境变量），用户侧没有手填入口了。
+/// 空字符串兜底曾经造出过必然 401 的客户端，所以这里把「空」统一判成「没有」，
+/// 解析只有这一处实现（Issue #4）。
 ///
 /// 这里只做纯逻辑，不做 IO：调用方负责把各自的来源读进来。
 public enum CurseforgeAPIKeyResolver {
     /// 解析最终生效的 Key。
     ///
-    /// 顺序：用户手填 → 内置（Secrets.properties / 环境变量）。
-    /// 空白串（含只有空格、只有换行）一律视为「没填」，这样用户清空输入框
-    /// 就能回到内置 Key，而不是得到一个必然被拒的空 Key。
+    /// 顺序：环境变量（本地开发覆盖）→ 打包进 App 的 Key。
+    /// 空白串（含只有空格、只有换行）一律视为「没有」，不返回空 Key。
     /// - Parameters:
-    ///   - userProvided: 用户在设置里填写的 Key，可以为 nil。
-    ///   - bundled: 打包进 App 或由环境变量给出的 Key，可以为 nil。
+    ///   - userProvided: 优先级更高的来源（目前是环境变量），可以为 nil。
+    ///   - bundled: 打包进 App 的 Key，可以为 nil。
     /// - Returns: 去掉首尾空白后的 Key；两者都没有有效值时返回 nil。
     public static func resolve(userProvided: String?, bundled: String?) -> String? {
         normalized(userProvided) ?? normalized(bundled)

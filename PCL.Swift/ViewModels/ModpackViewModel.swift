@@ -79,22 +79,13 @@ class ModpackViewModel: ObservableObject {
                     level: .error
                 )
             case .missingCurseforgeClient:
-                // 以前这里只说「从官方渠道重新下载」，用户没有任何可执行的动作
-                // （Issue #4 的截图就是这条）。现在直接给一个能跳到设置页的按钮：
-                // 手填的 Key 会立刻生效，不必重启，也不必等新版发布。
+                // Key 由构建时注入，用户侧不再有可填写的入口；走到这里说明
+                // 手里这份构建没带 Key（本地编译或旧版本），只能换一份重新下载。
                 MessageBoxManager.shared.showText(
                     title: "缺少 CurseForge API Key",
-                    content: "这个整合包使用 CurseForge 格式（内含 manifest.json），解析它必须带 CurseForge API Key。\n\n请到 设置 → 其他 → 社区资源 填入自己的 Key（可在 CurseForge 官网免费申请），或设置环境变量 PCLMAC_CURSE_FORGE_API_KEY 后重启启动器。",
-                    level: .error,
-                    .no(),
-                    .yes(label: "去设置", type: .highlight)
-                ) { button in
-                    guard button == 1 else { return }
-                    // 直接把路由切到「设置 → 其他」：那里有可以手填 Key 的输入框。
-                    let router: AppRouter = .shared
-                    router.setRoot(.settings)
-                    router.replaceLast(.launcherSettings)
-                }
+                    content: "这个整合包使用 CurseForge 格式（内含 manifest.json），解析它必须带 CurseForge API Key。\n\n当前构建没有内置 Key：请从官方渠道下载最新版 PCL.Swift；自行编译时可写进 Resources/Secrets.local.properties，或用环境变量 PCLMAC_CURSE_FORGE_API_KEY 启动。",
+                    level: .error
+                )
             case .unknownFormat:
                 MessageBoxManager.shared.showText(
                     title: "不支持的整合包格式",

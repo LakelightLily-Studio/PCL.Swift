@@ -150,12 +150,26 @@ class ResourceInstallViewModel: ObservableObject {
             saveDirectoryURL = instance.url.appending(path: saveDirectoryName)
         }
         
+        // 落盘文件名走「文件名格式」模板（设置 → 其他 → 社区资源）。
+        // 规则集中在 Core 的 ResourceFileName，这里只负责把项目信息喂进去；
+        // 渲染不出可用名字时回退成原始文件名，绝不产生空文件名。
+        let fileName: String = ResourceFileName.format(
+            template: LauncherConfig.shared.resourceFileNameFormat,
+            name: project.title,
+            version: version.version,
+            loader: version.loader,
+            type: project.type,
+            fileExtension: (primaryFile.name as NSString).pathExtension,
+            fallback: primaryFile.name
+        )
+        let destination: URL = saveDirectoryURL.appending(path: fileName)
+
         return .init(
             name: "资源下载 - \(project.title) \(version.version)",
             .init(0, "下载文件") { task, model in
                 try await FileDownloader.shared.download(
                     url: primaryFile.url,
-                    destination: saveDirectoryURL.appending(path: primaryFile.name),
+                    destination: destination,
                     sha1: primaryFile.sha1,
                     progressHandler: task.setProgress(_:)
                 )

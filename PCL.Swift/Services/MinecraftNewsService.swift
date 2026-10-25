@@ -2,7 +2,7 @@
 //  MinecraftNewsService.swift
 //  PCL.Swift
 //
-//  启动器主页用的 Minecraft 新闻。
+//  「预设 → Minecraft 新闻」主页用的新闻数据源（原来的启动器主页已删除）。
 //
 //  数据源与官方启动器同一个：launchercontent.mojang.com 的 v2/news.json。
 //  只取前几条做展示，点条目用系统浏览器打开原文。

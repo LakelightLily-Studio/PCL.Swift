@@ -312,6 +312,11 @@ private struct ResourceListItem: View {
 
     private var isSelected: Bool { viewModel.selectedIds.contains(resource.id) }
 
+    /// 「Mod 管理样式」：标题显示名称还是文件名，另一项降级到标题右侧的灰字。
+    private var showsNameAsTitle: Bool { LauncherConfig.shared.resourceTitleStyle == .nameFirst }
+    private var titleText: String { showsNameAsTitle ? resource.name : resource.fileName }
+    private var secondaryText: String { showsNameAsTitle ? resource.fileName : resource.name }
+
     var body: some View {
         MyListItem { hovered in
             HStack {
@@ -336,15 +341,15 @@ private struct ResourceListItem: View {
                     HStack(alignment: .center, spacing: 0) {
                         Group {
                             if #available(macOS 13, *) {
-                                MyText(resource.name)
+                                MyText(titleText)
                                     .strikethrough(resource.disabled)
                             } else {
-                                MyText((resource.disabled ? "（已禁用）" : "") + resource.name)
+                                MyText((resource.disabled ? "（已禁用）" : "") + titleText)
                             }
                         }
                         .animation(.easeInOut(duration: 0.1), value: resource.disabled)
 
-                        MyText(" | \(resource.fileName)", size: 12, color: .colorGray3)
+                        MyText(" | \(secondaryText)", size: 12, color: .colorGray3)
                         HStack(spacing: 3) {
                             ForEach(resource.tags, id: \.self) { tag in
                                 MyTag(tag, labelColor: .colorGray2, backgroundColor: .black.opacity(0.05), size: 12)

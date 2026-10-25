@@ -178,7 +178,7 @@ struct PersonalizationSettingsPage: View {
                         ), placeholder: "https://example.com/Custom.xaml")
                         .onChange(of: LauncherConfig.shared.homepageURL) { _ in config.touch() }
                     }
-                case .dashboard, .demo:
+                case .empty, .demo:
                     EmptyView()
                 }
 

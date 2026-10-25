@@ -13,7 +13,7 @@ import Core
 ///
 /// 排版对齐 PCL2 的 PageSetupLaunch：启动选项 / 内存分配 / 高级选项，末尾是
 /// 「版本独立设置」的入口。标题沿用 PCL2 的叫法，所以「启动」这一页里既有
-/// 游戏侧的启动参数，也有 Java 与垃圾回收器。
+/// 游戏侧的启动参数，也有 Java 与内存管理（垃圾回收器策略）。
 ///
 /// 与 PCL2 的差异只有三类，都是平台原因，不是偷懒：
 /// - 「离线皮肤」整卡不做：本启动器没有皮肤注入通道；
@@ -52,6 +52,8 @@ struct GameSettingsPage: View {
     @State private var garbageCollector: GarbageCollectorMode = LauncherConfig.shared.garbageCollector
     /// 「还原 JVM 参数」小图标的悬停高亮。
     @State private var resetHovered: Bool = false
+    /// 「重新扫描 Java」小图标的悬停高亮。
+    @State private var refreshHovered: Bool = false
 
     var body: some View {
         CardContainer {
@@ -206,7 +208,7 @@ struct GameSettingsPage: View {
 
                 javaSection
 
-                SettingRow("垃圾回收器", labelWidth: 140) {
+                SettingRow("内存管理", labelWidth: 140) {
                     MySelect($garbageCollector, entries: GarbageCollectorMode.menuOrder)
                         .frame(maxWidth: .infinity)
                         .onChange(of: garbageCollector) { LauncherConfig.shared.garbageCollector = $0 }
@@ -274,91 +276,140 @@ struct GameSettingsPage: View {
 
     // MARK: - Java
 
+    /// 「Java 列表」按 PCL2 的形态做成一行下拉：选中的 Java 成为全局默认，
+    /// 右侧的刷新按钮重新扫描；一个都没检测到时，下拉位置换成
+    /// 「未找到 Java，点击以导入已有的 Java」，点它直接开文件选择框。
     private var javaSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                MyText("Java 列表", size: 14)
-                Spacer()
-                MyButton("刷新") {
-                    do {
-                        try JavaManager.shared.research()
-                        hint("刷新成功！", type: .finish)
-                    } catch {
-                        err("刷新 Java 列表失败：\(error.localizedDescription)")
-                        hint("刷新 Java 列表失败：\(error.localizedDescription)", type: .critical)
-                    }
+            SettingRow("Java 列表", labelWidth: 140, verticalPadding: 2) {
+                if viewModel.javaList.isEmpty {
+                    MyButton("未找到 Java，点击以导入已有的 Java") { importJava() }
+                        .frame(maxWidth: .infinity)
+                } else {
+                    MySelect(javaChoiceBinding, entries: javaEntries)
+                        .frame(maxWidth: .infinity)
                 }
-                .frame(width: 76)
-
-                MyButton("安装") {
-                    Task {
-                        do {
-                            let downloads: [MojangJavaList.JavaDownload] = try await viewModel.javaDownloads()
-                            if let index: Int = await MessageBoxManager.shared.showListAsync(
-                                title: "选择 Java 版本",
-                                items: downloads.map(viewModel.listItem(forJavaDownload:))
-                            ) {
-                                TaskManager.shared.execute(task: JavaInstallTask.create(download: downloads[index]))
-                                AppRouter.shared.append(.tasks)
-                            }
-                        } catch {
-                            err("拉取 Java 列表失败：\(error.localizedDescription)")
-                            hint("拉取 Java 列表失败：\(error.localizedDescription)", type: .critical)
-                        }
-                    }
-                }
-                .frame(width: 76)
-
-                MyButton("手动添加") {
-                    let panel = NSOpenPanel()
-                    panel.canChooseFiles = true
-                    panel.canChooseDirectories = false
-                    panel.allowsMultipleSelection = false
-                    panel.title = "选择 java 可执行文件"
-
-                    panel.begin { result in
-                        guard result == .OK, let url = panel.url else { return }
-                        do {
-                            let runtime = try viewModel.addCustomRuntime(at: url)
-                            hint("添加 \(runtime.description) 成功！", type: .finish)
-                        } catch {
-                            hint("添加 Java 失败：\(error.localizedDescription)", type: .critical)
-                        }
-                    }
-                }
-                .frame(width: 96)
+                refreshButton
             }
 
-            VStack(spacing: 0) {
-                ForEach(0..<viewModel.javaList.count, id: \.self) { idx in
-                    let item = viewModel.javaList[idx]
-                    MyListItem { hovered in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                MyText(item.name)
-                                    .lineLimit(1)
-                                MyText(item.url.path, color: .colorGray3)
-                                    .lineLimit(1)
-                            }
-                            Spacer(minLength: 0)
-                            if item.isCustom && hovered {
-                                Image(systemName: "trash")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 12)
-                                    .foregroundStyle(Color.color3)
-                                    .padding(.trailing, 8)
-                                    .contentShape(.rect)
-                                    .onTapGesture {
-                                        viewModel.removeCustomRuntime(at: item.url)
-                                        hint("移除成功！", type: .finish)
-                                    }
-                            }
-                        }
-                    }
+            HStack(spacing: 20) {
+                MyButton("安装 Java") { installJava() }
+                    .frame(width: 100)
+                MyButton("手动添加") { importJava() }
+                    .frame(width: 100)
+                MyButton("移除自定义", type: .red, disabled: selectedRuntime?.isCustom != true) {
+                    removeSelectedCustomRuntime()
                 }
+                .frame(width: 110)
+                Spacer()
+            }
+            .frame(height: 35)
+
+            MyTip(text: "这里选的是全局默认 Java，只对还没有单独指定 Java 的实例生效；实例设置里选过的 Java 优先。", theme: .blue)
+        }
+    }
+
+    /// 下拉项：自动选择 + 检测到的每个 Java。
+    private var javaEntries: [JavaChoice] {
+        [.init(url: nil, title: "自动选择")] + viewModel.javaList.map {
+            .init(url: $0.url, title: $0.name)
+        }
+    }
+
+    /// 下拉的取值直接映射到 LauncherConfig.preferredJavaURL：不额外存一份状态，
+    /// 避免「界面显示旧的、启动用新的」。
+    private var javaChoiceBinding: Binding<JavaChoice> {
+        Binding(
+            get: {
+                javaEntries.first { $0.url == LauncherConfig.shared.preferredJavaURL } ?? javaEntries[0]
+            },
+            set: { newValue in
+                LauncherConfig.shared.preferredJavaURL = newValue.url
+                // 启动流程读的是 Core 里的那份副本，必须同步，否则要等下次启动才生效。
+                LauncherConfigDefaults.preferredJavaURL = newValue.url
+            }
+        )
+    }
+
+    private var selectedRuntime: JavaSettingsViewModel.JavaListItem? {
+        viewModel.javaList.first { $0.url == LauncherConfig.shared.preferredJavaURL }
+    }
+
+    private var refreshButton: some View {
+        Image(.iconRefresh)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 14, height: 14)
+            .foregroundStyle(refreshHovered ? Color.color3 : .color1)
+            .padding(6)
+            .contentShape(.rect)
+            .onHover { refreshHovered = $0 }
+            .onTapGesture(perform: researchJava)
+            .help("重新扫描 Java")
+    }
+
+    private func researchJava() {
+        do {
+            try JavaManager.shared.research()
+            hint("刷新成功！", type: .finish)
+        } catch {
+            err("刷新 Java 列表失败：\(error.localizedDescription)")
+            hint("刷新 Java 列表失败：\(error.localizedDescription)", type: .critical)
+        }
+    }
+
+    private func installJava() {
+        Task {
+            do {
+                let downloads: [MojangJavaList.JavaDownload] = try await viewModel.javaDownloads()
+                if let index: Int = await MessageBoxManager.shared.showListAsync(
+                    title: "选择 Java 版本",
+                    items: downloads.map(viewModel.listItem(forJavaDownload:))
+                ) {
+                    TaskManager.shared.execute(task: JavaInstallTask.create(download: downloads[index]))
+                    AppRouter.shared.append(.tasks)
+                }
+            } catch {
+                err("拉取 Java 列表失败：\(error.localizedDescription)")
+                hint("拉取 Java 列表失败：\(error.localizedDescription)", type: .critical)
             }
         }
     }
 
+    private func importJava() {
+        let panel: NSOpenPanel = .init()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.title = "选择 java 可执行文件"
+
+        panel.begin { result in
+            guard result == .OK, let url = panel.url else { return }
+            do {
+                let runtime = try viewModel.addCustomRuntime(at: url)
+                hint("添加 \(runtime.description) 成功！", type: .finish)
+            } catch {
+                hint("添加 Java 失败：\(error.localizedDescription)", type: .critical)
+            }
+        }
+    }
+
+    private func removeSelectedCustomRuntime() {
+        guard let runtime = selectedRuntime, runtime.isCustom else { return }
+        viewModel.removeCustomRuntime(at: runtime.url)
+        // 移除的正好是全局默认时，回落到自动选择，否则下一次启动会拿着失效路径。
+        if LauncherConfig.shared.preferredJavaURL == runtime.url {
+            LauncherConfig.shared.preferredJavaURL = nil
+            LauncherConfigDefaults.preferredJavaURL = nil
+        }
+        hint("移除成功！", type: .finish)
+    }
+
+    /// 下拉项。url 为 nil 表示「自动选择」。
+    struct JavaChoice: Hashable, CustomStringConvertible {
+        let url: URL?
+        let title: String
+
+        var description: String { title }
+    }
 }

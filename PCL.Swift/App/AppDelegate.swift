@@ -77,6 +77,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Core 读不到 App 层的 LauncherConfig，启动时把默认值灌进去一次。
         LauncherConfigDefaults.launcherVisibility = LauncherConfig.shared.launcherVisibility
         LauncherConfigDefaults.processPriority = LauncherConfig.shared.processPriority
+        LauncherConfigDefaults.preferredJavaURL = LauncherConfig.shared.preferredJavaURL
         
         JavaManager.install(.init(customJavaRuntimes: LauncherConfig.shared.customJavaRuntimes))
         

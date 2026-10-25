@@ -73,7 +73,10 @@ public enum MinecraftLaunchTask {
     }
 
     private static func checkJava(task: SubTask, model: Model) async throws {
+        // 优先级：实例自己指定的 Java → 设置里的全局默认 Java → 自动挑（bestMatch）。
+        // 全局默认在实例还没有 javaURL 时生效；一旦实例选过，就以实例为准。
         var javaRuntime: JavaRuntime? = model.instance.config.javaURL.flatMap { try? JavaSearcher.load(from: $0) }
+            ?? LauncherConfigDefaults.preferredJavaURL.flatMap { try? JavaSearcher.load(from: $0) }
         let minMajorVersion = model.instance.manifest.javaVersion.majorVersion
         
         let systemArch = Architecture.systemArchitecture()

@@ -92,7 +92,7 @@ class LauncherConfig: Codable {
     public var downloadSourcePolicy: DownloadSourcePolicy = .officialFirst {
         didSet { LauncherConfig.markDirty() }
     }
-    public var homepageType: HomepageType = .dashboard {
+    public var homepageType: HomepageType = .empty {
         didSet { LauncherConfig.markDirty() }
     }
     /// 预设主页的选项。
@@ -164,12 +164,16 @@ class LauncherConfig: Codable {
 
     // MARK: - 社区资源
 
-    /// 用户手填的 CurseForge API Key。空串表示跟随内置 Key（Secrets.properties）。
+    /// 下载资源时使用的文件名模板。
     ///
-    /// 存明文：这个 Key 本身就是"调用方凭据"，CurseForge 没有可替代的匿名接口，
-    /// 也没有可以加密后存放的密钥来源。它只留在本机 config.json 里，
-    /// 并且不在设置导出的白名单里（SettingsTransferService 白名单不含凭据）。
-    public var curseforgeApiKey: String = "" {
+    /// 支持的占位符：{name}（资源名称）、{version}（版本号）、{loader}（加载器）、
+    /// {type}（资源类型）。格式化逻辑只有一处实现：Core 的 ResourceFileName，
+    /// 改规则请改那里，不要在下载点各自拼字符串。
+    public var resourceFileNameFormat: String = ResourceFileName.defaultTemplate {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 已安装资源列表的标题样式（标题显示名称还是文件名）。
+    public var resourceTitleStyle: ResourceTitleStyle = .nameFirst {
         didSet { LauncherConfig.markDirty() }
     }
 
@@ -228,6 +232,13 @@ class LauncherConfig: Codable {
     }
     /// 内存分配方式：自动配置按当前可用内存现算，自定义用上面的 memory。
     public var memoryMode: MemoryAllocationMode = .automatic {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 全局优先使用的 Java。nil 表示自动选择（交给 JavaSearcher 按版本挑）。
+    ///
+    /// 只在实例自己没有指定 Java 时生效：实例设置里选过的 Java 优先，
+    /// 否则「自动选择」的用户会被全局值悄悄改掉。
+    public var preferredJavaURL: URL? {
         didSet { LauncherConfig.markDirty() }
     }
     /// 垃圾回收器策略（设置 → 启动 → 高级选项 → 内存管理）。
@@ -291,7 +302,8 @@ class LauncherConfig: Codable {
         self.ignoreLauncherUpdates = try container.decodeIfPresent(Bool.self, forKey: .ignoreLauncherUpdates) ?? false
         self.downloadSourcePolicy = try container.decodeIfPresent(DownloadSourcePolicy.self, forKey: .downloadSourcePolicy) ?? .officialFirst
         // 旧配置里存的是 "empty"（原来的空白主页），现在统一落到新的主页。
-        self.homepageType = (try? container.decodeIfPresent(HomepageType.self, forKey: .homepageType)) ?? .dashboard
+        // 旧的 dashboard（启动器主页）已删除：解码失败时落到空白主页，升级不会被卡在未知枚举值上。
+        self.homepageType = (try? container.decodeIfPresent(HomepageType.self, forKey: .homepageType)) ?? .empty
         self.homepagePreset = (try? container.decodeIfPresent(HomepagePreset.self, forKey: .homepagePreset)) ?? .minecraftNews
         self.homepageURL = try container.decodeIfPresent(String.self, forKey: .homepageURL) ?? ""
         self.enabledFlags = try container.decodeIfPresent(Set<FeatureFlag>.self, forKey: .enabledFlags)
@@ -310,7 +322,8 @@ class LauncherConfig: Codable {
         self.separatesVersionListSource = try container.decodeIfPresent(Bool.self, forKey: .separatesVersionListSource) ?? false
         self.versionListSourcePolicy = try container.decodeIfPresent(DownloadSourcePolicy.self, forKey: .versionListSourcePolicy) ?? .officialFirst
         self.customCacheDirectory = try container.decodeIfPresent(URL.self, forKey: .customCacheDirectory)
-        self.curseforgeApiKey = try container.decodeIfPresent(String.self, forKey: .curseforgeApiKey) ?? ""
+        self.resourceFileNameFormat = try container.decodeIfPresent(String.self, forKey: .resourceFileNameFormat) ?? ResourceFileName.defaultTemplate
+        self.resourceTitleStyle = (try? container.decodeIfPresent(ResourceTitleStyle.self, forKey: .resourceTitleStyle)) ?? .nameFirst
 
         self.titleBarLogoType = (try? container.decodeIfPresent(TitleBarLogoType.self, forKey: .titleBarLogoType)) ?? .logo
         self.titleBarText = try container.decodeIfPresent(String.self, forKey: .titleBarText) ?? "PCL.Swift"
@@ -329,6 +342,7 @@ class LauncherConfig: Codable {
         // 与升级前的实际启动参数一致。
         self.memoryMode = (try? container.decodeIfPresent(MemoryAllocationMode.self, forKey: .memoryMode)) ?? .custom
         self.garbageCollector = (try? container.decodeIfPresent(GarbageCollectorMode.self, forKey: .garbageCollector)) ?? .tunedG1
+        self.preferredJavaURL = try container.decodeIfPresent(URL.self, forKey: .preferredJavaURL)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -362,7 +376,8 @@ class LauncherConfig: Codable {
         try container.encode(separatesVersionListSource, forKey: .separatesVersionListSource)
         try container.encode(versionListSourcePolicy, forKey: .versionListSourcePolicy)
         try container.encodeIfPresent(customCacheDirectory, forKey: .customCacheDirectory)
-        try container.encode(curseforgeApiKey, forKey: .curseforgeApiKey)
+        try container.encode(resourceFileNameFormat, forKey: .resourceFileNameFormat)
+        try container.encode(resourceTitleStyle, forKey: .resourceTitleStyle)
 
         try container.encode(titleBarLogoType, forKey: .titleBarLogoType)
         try container.encode(titleBarText, forKey: .titleBarText)
@@ -379,6 +394,7 @@ class LauncherConfig: Codable {
         try container.encode(memory, forKey: .memory)
         try container.encode(memoryMode, forKey: .memoryMode)
         try container.encode(garbageCollector, forKey: .garbageCollector)
+        try container.encodeIfPresent(preferredJavaURL, forKey: .preferredJavaURL)
     }
 
     /// 合并短时间内的多次变更，避免每个字段改动都触发一次写盘。
@@ -449,7 +465,8 @@ class LauncherConfig: Codable {
         case separatesVersionListSource
         case versionListSourcePolicy
         case customCacheDirectory
-        case curseforgeApiKey
+        case resourceFileNameFormat
+        case resourceTitleStyle
         case titleBarLogoType
         case titleBarText
         case titleBarImageURL
@@ -464,11 +481,12 @@ class LauncherConfig: Codable {
         case memory
         case memoryMode
         case garbageCollector
+        case preferredJavaURL
     }
 
     enum HomepageType: String, Codable, CaseIterable, CustomStringConvertible {
-        /// 启动器主页：账号皮肤、Minecraft 新闻、更新公告。
-        case dashboard
+        /// 空白主页：右侧不渲染任何内容（原来的「启动器主页」整页已删除）。
+        case empty
         /// 预设主页（当前只有「Minecraft 新闻」）。
         case preset
         /// 读取本地 Custom.xaml（与 PCL2 相同的主页文件）。
@@ -480,11 +498,26 @@ class LauncherConfig: Codable {
 
         var description: String {
             switch self {
-            case .dashboard: "启动器主页"
+            case .empty: "空白"
             case .preset: "预设"
             case .local: "读取本地文件"
             case .remote: "联网更新"
             case .demo: "[内置] 控件预览"
+            }
+        }
+    }
+
+    /// 「Mod 管理样式」：已安装资源列表的标题显示哪一项。
+    enum ResourceTitleStyle: String, Codable, CaseIterable, CustomStringConvertible {
+        /// 标题显示名称，详情显示文件名（PCL2 的默认）。
+        case nameFirst
+        /// 标题显示文件名，详情显示名称。
+        case fileFirst
+
+        var description: String {
+            switch self {
+            case .nameFirst: "标题显示名称，详情显示文件名"
+            case .fileFirst: "标题显示文件名，详情显示名称"
             }
         }
     }

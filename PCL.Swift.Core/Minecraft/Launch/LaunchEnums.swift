@@ -70,6 +70,10 @@ public enum LauncherConfigDefaults {
     public static var launcherVisibility: LauncherVisibility = .keepVisible
     /// 全局默认进程优先级。
     public static var processPriority: ProcessPriority = .normal
+    /// 全局优先使用的 Java（设置 → 启动 → 高级选项 → Java 列表）。
+    ///
+    /// nil 表示自动选择：仍由 JavaSearcher 按版本挑。实例自己指定过 Java 时不看这个值。
+    public static var preferredJavaURL: URL?
 }
 
 /// 游戏进程优先级。

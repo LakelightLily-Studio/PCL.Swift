@@ -13,8 +13,11 @@ struct LaunchPage: View {
 
     var body: some View {
         switch LauncherConfig.shared.homepageType {
-        case .dashboard:
-            DashboardHomepageView()
+        case .empty:
+            // 空白主页：右侧不渲染任何内容。原来那套「启动器主页」
+            // （账号皮肤 / 更新公告 / Minecraft 新闻）已按需求整页删除。
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .preset:
             customHomepage(presetView)
         case .local:
