@@ -88,6 +88,17 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
 删掉源码树里的这类文件后若构建仍报 `lstat(...): No such file or directory`，那是 DerivedData 里的陈旧快照，
 清一次构建缓存即可，不是源码问题。
 
+### 图标只有 Xcode 26 能编
+
+- `PCL.Swift/AppIcon.icon` 是 Icon Composer 格式，只有 Xcode 26 的 `actool` 会把它编译成 `AppIcon.icns`，
+  并写入 `CFBundleIconFile` / `CFBundleIconName`。用 Xcode 16 打包时它只会被当成普通资源拷进
+  `Contents/Resources/AppIcon.icon`，产物**没有 icns**，Finder / Dock 显示空白图标（2.0.1、2.0.2 就是这样）。
+- 所以**发版请走 CI**：`gh workflow run build.yml -f build_configuration=Release -f sign_app=false`
+  （`sign_app=false` 跳过证书导入、改用 ad-hoc 签名，不需要 `MACOS_*` secret）。
+- 取 CI 产物要用 `gh api repos/<owner>/<repo>/actions/artifacts/<id>/zip` 再 `ditto -x -k` 解压，
+  **不要用 `gh run download`**：它用 Go 的 zip 解压，会把框架里的 `Versions/Current` 符号链接写成普通文件，
+  框架签名随即失效（`codesign --verify --deep` 报 not signed at all），App 也起不来。
+
 测试相关的事实：
 
 - 测试框架是 **swift-testing**（`import Testing`、`@Test`、`#expect`），不是 XCTest。新增测试不要混入 XCTest。
