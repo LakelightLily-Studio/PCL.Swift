@@ -20,3 +20,7 @@ build.xcarchive
 *.profraw
 *.trace/
 *.xcresult
+
+# 本地密钥覆盖文件：本地开发把真实 Key 写这里，CI 走的是 Secrets.properties。
+# 仓库里的 Resources/Secrets.properties 只有空模板，真实 Key 两边都不进版本库。
+Resources/Secrets.local.properties

@@ -327,6 +327,15 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
 
 - `Resources/Secrets.properties` 是**模板**，仓库里只有空占位，禁止提交真实凭据。
   CI 在构建前按 secrets 重写该文件；本地可用环境变量 `PCLMAC_<KEY>` 覆盖（见 `PCL.Swift/App/Secrets.swift`）。
+- 本地开发更省事的做法是 `Resources/Secrets.local.properties`（写同名键即可，已在 `.gitignore` 里），
+  它覆盖打包文件里的同键，模板保持干净。优先级：环境变量 → local 文件 → Secrets.properties。
+- **CurseForge API Key 有三层**：用户在 设置 → 其他 → 社区资源 手填的（存在 `config.json`，不在设置导出白名单里）
+  → 内置 Key（上面两条）。解析只有一处实现：Core 的 `CurseforgeAPIKeyResolver`。
+  没有可用 Key 时 `Secrets.shared.curseforgeClient` 返回 `nil`，**不要**用 `?? ""` 造空 Key 客户端——
+  那样请求只会 401，报错还看不出原因（Issue #4）。改完 Key 记得同步 `DownloadSourceManager.updateCurseforgeAPIKey`，
+  下载请求头读的是它那里的副本。
+- `PropertiesLoader` 把 `KEY=`（值为空）当作合法的空值，不要改回"整行非法"：CI 没拿到 secret 时就会写出
+  这种行，一行坏掉会让整份 Secrets 作废。
 - 用户数据落在 `~/Library/Application Support/PCL.Swift/`（`config.json`、`Logs`、`Caches`、`Temp`），
   路径常量在 `PCL.Swift.Core/Utils/URLConstants.swift`，不要散落硬编码。
 
