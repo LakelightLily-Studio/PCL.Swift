@@ -214,10 +214,6 @@ struct GameSettingsPage: View {
                         .onChange(of: garbageCollector) { LauncherConfig.shared.garbageCollector = $0 }
                 }
                 MyText(garbageCollectorDescription, size: 12, color: .colorGray3)
-                MyTip(
-                    text: "选择具体策略后，会先移除清单与 JVM 参数里的 GC 相关项，再按策略补一套；选「不指定」则完全使用你写的参数。",
-                    theme: .yellow
-                )
 
                 MyTip(text: "版本独立设置里还有更多高级选项可供调整。", theme: .blue)
                 .padding(.top, 2)
@@ -227,10 +223,11 @@ struct GameSettingsPage: View {
 
     /// JVM 参数行。
     ///
-    /// PCL2 把「还原」做成标签右侧的小图标按钮（悬停才提示），而不是行尾一颗大按钮：
-    /// 它属于这个输入框的附属操作，放在行尾会把输入框挤窄，也不符合原版的视觉层级。
+    /// 输入框与版本设置里保持一致：单行 MyTextField，不再用高 96 的多行框。
+    /// 「还原」仍放在标签右侧的小图标按钮上（悬停才提示）——它属于这个输入框的
+    /// 附属操作，放在行尾会把输入框挤窄。
     private var jvmArgumentsRow: some View {
-        HStack(alignment: .top, spacing: 20) {
+        HStack(alignment: .center, spacing: 20) {
             HStack(spacing: 4) {
                 MyText("Java 虚拟机参数")
                 Image(.iconRefresh)
@@ -246,7 +243,7 @@ struct GameSettingsPage: View {
             }
             .frame(width: 140, alignment: .leading)
 
-            MyTextArea(text: $jvmArguments, placeholder: "例如 -XX:+AlwaysPreTouch -Dfile.encoding=UTF-8")
+            MyTextField(text: $jvmArguments, placeholder: "例如 -XX:+AlwaysPreTouch -Dfile.encoding=UTF-8")
                 .onChange(of: jvmArguments) { LauncherConfig.shared.jvmArguments = $0 }
         }
         .padding(.horizontal, 6)
@@ -304,8 +301,6 @@ struct GameSettingsPage: View {
                 Spacer()
             }
             .frame(height: 35)
-
-            MyTip(text: "这里选的是全局默认 Java，只对还没有单独指定 Java 的实例生效；实例设置里选过的 Java 优先。", theme: .blue)
         }
     }
 
