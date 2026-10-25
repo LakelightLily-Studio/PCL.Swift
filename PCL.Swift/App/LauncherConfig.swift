@@ -92,7 +92,15 @@ class LauncherConfig: Codable {
     public var downloadSourcePolicy: DownloadSourcePolicy = .officialFirst {
         didSet { LauncherConfig.markDirty() }
     }
-    public var homepageType: HomepageType = .empty {
+    public var homepageType: HomepageType = .dashboard {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 预设主页的选项。
+    public var homepagePreset: HomepagePreset = .minecraftNews {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 「联网更新」的下载地址（Custom.xaml）。空字符串表示未填写。
+    public var homepageURL: String = "" {
         didSet { LauncherConfig.markDirty() }
     }
     public var enabledFlags: Set<FeatureFlag>? {
@@ -132,6 +140,12 @@ class LauncherConfig: Codable {
     public var downloadSpeedLimit: Int = 0 {
         didSet { LauncherConfig.markDirty() }
     }
+    /// 启动前把游戏语言自动设成中文（设置 → 其他 → 辅助功能）。
+    ///
+    /// 只在玩家没手动选过语言或还没有存档时生效，见 GameOptions.setLanguage。
+    public var autoSetGameLanguage: Bool = true {
+        didSet { LauncherConfig.markDirty() }
+    }
     /// 版本列表源是否与文件下载源分开设置。
     ///
     /// 关掉时 versionListSourcePolicy 跟随 downloadSourcePolicy，
@@ -150,26 +164,6 @@ class LauncherConfig: Codable {
 
     // MARK: - 外观
 
-    /// 背景图片路径。nil 表示不显示背景图。
-    public var backgroundImageURL: URL? {
-        didSet { LauncherConfig.markDirty() }
-    }
-    /// 背景图不透明度（0…1）。
-    public var backgroundOpacity: Double = 0.35 {
-        didSet { LauncherConfig.markDirty() }
-    }
-    /// 背景图模糊半径（pt）。
-    public var backgroundBlur: Double = 12 {
-        didSet { LauncherConfig.markDirty() }
-    }
-    /// 是否在背景图上叠加主题色。
-    public var backgroundTinted: Bool = true {
-        didSet { LauncherConfig.markDirty() }
-    }
-    /// 背景图填充方式：true 为填充（裁切），false 为适应（留白）。
-    public var backgroundFills: Bool = true {
-        didSet { LauncherConfig.markDirty() }
-    }
     /// 标题栏 Logo 类型。
     public var titleBarLogoType: TitleBarLogoType = .logo {
         didSet { LauncherConfig.markDirty() }
@@ -185,10 +179,6 @@ class LauncherConfig: Codable {
 
     // MARK: - 启动默认值
 
-    /// 全局默认游戏窗口标题。空串表示使用游戏自身标题。
-    public var gameWindowTitle: String = "" {
-        didSet { LauncherConfig.markDirty() }
-    }
     /// 全局默认游戏窗口模式。
     public var gameWindowType: GameWindowType = .standard {
         didSet { LauncherConfig.markDirty() }
@@ -213,25 +203,55 @@ class LauncherConfig: Codable {
     public var prelaunchCommand: String = "" {
         didSet { LauncherConfig.markDirty() }
     }
-    /// 全局默认是否等待启动前命令执行完成。
-    public var prelaunchWaitForCompletion: Bool = false {
-        didSet { LauncherConfig.markDirty() }
-    }
     /// 全局默认附加游戏参数。
     public var gameArguments: String = "" {
         didSet { LauncherConfig.markDirty() }
     }
     /// 全局默认额外 JVM 参数。
-    public var jvmArguments: String = "" {
+    public var jvmArguments: String = LauncherConfig.defaultJVMArguments {
         didSet { LauncherConfig.markDirty() }
     }
-    /// 全局默认内存分配（MB）。
+    /// 全局默认内存分配（MB），只在 memoryMode 为 custom 时使用。
     public var memory: UInt64 = 4096 {
         didSet { LauncherConfig.markDirty() }
     }
-    /// 是否启用启动前内存优化。
-    public var memoryOptimize: Bool = false {
+    /// 内存分配方式：自动配置按当前可用内存现算，自定义用上面的 memory。
+    public var memoryMode: MemoryAllocationMode = .automatic {
         didSet { LauncherConfig.markDirty() }
+    }
+    /// 垃圾回收器策略（设置 → 启动 → 高级选项 → 内存管理）。
+    public var garbageCollector: GarbageCollectorMode = .tunedG1 {
+        didSet { LauncherConfig.markDirty() }
+    }
+
+    /// PCL2 的默认 JVM 参数。
+    ///
+    /// 只作为「新配置的起点」与「高级选项里的还原按钮」的落点：
+    /// 老配置里存的是它自己的值（大多为空串），升级不会替用户改写。
+    public static let defaultJVMArguments: String =
+        "-XX:-OmitStackTraceInFastThrow -Djdk.lang.Process.allowAmbiguousCommands=True "
+        + "-Dfml.ignoreInvalidMinecraftCertificates=True -Dfml.ignorePatchDiscrepancies=True"
+
+    /// 全局「内存分配」最终生效的值（MB）。
+    ///
+    /// 自动配置按当前可用内存现算，所以每次打开设置页、每次启动都可能不同——
+    /// 这正是它的设计意图（PCL2 的自动配置也是现算的）。
+    public var resolvedMemoryMB: UInt64 {
+        resolvedMemoryMB()
+    }
+
+    /// 同上，但按具体实例的 Mod 量计算自动配置值。
+    ///
+    /// 设置页只能按「普通版本」的档位估算（那里没有实例上下文）；真正启动时
+    /// 要把实例的 mods 目录数一遍，装了 300 个 Mod 的整合包与纯净版不该拿到同样的内存。
+    public func resolvedMemoryMB(modCount: Int = 0, modable: Bool = false) -> UInt64 {
+        switch memoryMode {
+        case .custom:
+            return memory
+        case .automatic:
+            let gigabytes: Double = MemoryAllocation.recommendedGigabytes(modCount: modCount, modable: modable)
+            return UInt64((gigabytes * 1024).rounded())
+        }
     }
 
 
@@ -259,7 +279,10 @@ class LauncherConfig: Codable {
         self.multiplayerCustomPeer = try container.decodeIfPresent(String.self, forKey: .multiplayerCustomPeer)
         self.ignoreLauncherUpdates = try container.decodeIfPresent(Bool.self, forKey: .ignoreLauncherUpdates) ?? false
         self.downloadSourcePolicy = try container.decodeIfPresent(DownloadSourcePolicy.self, forKey: .downloadSourcePolicy) ?? .officialFirst
-        self.homepageType = try container.decodeIfPresent(HomepageType.self, forKey: .homepageType) ?? .empty
+        // 旧配置里存的是 "empty"（原来的空白主页），现在统一落到新的主页。
+        self.homepageType = (try? container.decodeIfPresent(HomepageType.self, forKey: .homepageType)) ?? .dashboard
+        self.homepagePreset = (try? container.decodeIfPresent(HomepagePreset.self, forKey: .homepagePreset)) ?? .minecraftNews
+        self.homepageURL = try container.decodeIfPresent(String.self, forKey: .homepageURL) ?? ""
         self.enabledFlags = try container.decodeIfPresent(Set<FeatureFlag>.self, forKey: .enabledFlags)
         self.customJavaRuntimes = try container.decodeIfPresent([URL].self, forKey: .customJavaRuntimes) ?? []
         // 主题名改过一次（default/swiftOrange → themeBlue/themeOrange），
@@ -272,31 +295,28 @@ class LauncherConfig: Codable {
 
         self.downloadMaxThreads = try container.decodeIfPresent(Int.self, forKey: .downloadMaxThreads)
         self.downloadSpeedLimit = try container.decodeIfPresent(Int.self, forKey: .downloadSpeedLimit) ?? 0
+        self.autoSetGameLanguage = try container.decodeIfPresent(Bool.self, forKey: .autoSetGameLanguage) ?? true
         self.separatesVersionListSource = try container.decodeIfPresent(Bool.self, forKey: .separatesVersionListSource) ?? false
         self.versionListSourcePolicy = try container.decodeIfPresent(DownloadSourcePolicy.self, forKey: .versionListSourcePolicy) ?? .officialFirst
         self.customCacheDirectory = try container.decodeIfPresent(URL.self, forKey: .customCacheDirectory)
 
-        self.backgroundImageURL = try container.decodeIfPresent(URL.self, forKey: .backgroundImageURL)
-        self.backgroundOpacity = try container.decodeIfPresent(Double.self, forKey: .backgroundOpacity) ?? 0.35
-        self.backgroundBlur = try container.decodeIfPresent(Double.self, forKey: .backgroundBlur) ?? 12
-        self.backgroundTinted = try container.decodeIfPresent(Bool.self, forKey: .backgroundTinted) ?? true
-        self.backgroundFills = try container.decodeIfPresent(Bool.self, forKey: .backgroundFills) ?? true
         self.titleBarLogoType = (try? container.decodeIfPresent(TitleBarLogoType.self, forKey: .titleBarLogoType)) ?? .logo
         self.titleBarText = try container.decodeIfPresent(String.self, forKey: .titleBarText) ?? "PCL.Swift"
         self.titleBarImageURL = try container.decodeIfPresent(URL.self, forKey: .titleBarImageURL)
 
-        self.gameWindowTitle = try container.decodeIfPresent(String.self, forKey: .gameWindowTitle) ?? ""
         self.gameWindowType = (try? container.decodeIfPresent(GameWindowType.self, forKey: .gameWindowType)) ?? .standard
         self.gameWindowWidth = try container.decodeIfPresent(Int.self, forKey: .gameWindowWidth) ?? 854
         self.gameWindowHeight = try container.decodeIfPresent(Int.self, forKey: .gameWindowHeight) ?? 480
         self.launcherVisibility = (try? container.decodeIfPresent(LauncherVisibility.self, forKey: .launcherVisibility)) ?? .keepVisible
         self.processPriority = (try? container.decodeIfPresent(ProcessPriority.self, forKey: .processPriority)) ?? .normal
         self.prelaunchCommand = try container.decodeIfPresent(String.self, forKey: .prelaunchCommand) ?? ""
-        self.prelaunchWaitForCompletion = try container.decodeIfPresent(Bool.self, forKey: .prelaunchWaitForCompletion) ?? false
         self.gameArguments = try container.decodeIfPresent(String.self, forKey: .gameArguments) ?? ""
-        self.jvmArguments = try container.decodeIfPresent(String.self, forKey: .jvmArguments) ?? ""
+        self.jvmArguments = try container.decodeIfPresent(String.self, forKey: .jvmArguments) ?? LauncherConfig.defaultJVMArguments
         self.memory = try container.decodeIfPresent(UInt64.self, forKey: .memory) ?? 4096
-        self.memoryOptimize = try container.decodeIfPresent(Bool.self, forKey: .memoryOptimize) ?? false
+        // 旧配置没有这两个键：内存沿用原来的自定义值，GC 用 PCL2 的默认（调优 G1GC），
+        // 与升级前的实际启动参数一致。
+        self.memoryMode = (try? container.decodeIfPresent(MemoryAllocationMode.self, forKey: .memoryMode)) ?? .custom
+        self.garbageCollector = (try? container.decodeIfPresent(GarbageCollectorMode.self, forKey: .garbageCollector)) ?? .tunedG1
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -314,6 +334,8 @@ class LauncherConfig: Codable {
         try container.encode(ignoreLauncherUpdates, forKey: .ignoreLauncherUpdates)
         try container.encode(downloadSourcePolicy, forKey: .downloadSourcePolicy)
         try container.encode(homepageType, forKey: .homepageType)
+        try container.encode(homepagePreset, forKey: .homepagePreset)
+        try container.encode(homepageURL, forKey: .homepageURL)
         try container.encodeIfPresent(enabledFlags, forKey: .enabledFlags)
         try container.encode(customJavaRuntimes, forKey: .customJavaRuntimes)
         try container.encode(theme, forKey: .theme)
@@ -324,31 +346,26 @@ class LauncherConfig: Codable {
 
         try container.encodeIfPresent(downloadMaxThreads, forKey: .downloadMaxThreads)
         try container.encode(downloadSpeedLimit, forKey: .downloadSpeedLimit)
+        try container.encode(autoSetGameLanguage, forKey: .autoSetGameLanguage)
         try container.encode(separatesVersionListSource, forKey: .separatesVersionListSource)
         try container.encode(versionListSourcePolicy, forKey: .versionListSourcePolicy)
         try container.encodeIfPresent(customCacheDirectory, forKey: .customCacheDirectory)
 
-        try container.encodeIfPresent(backgroundImageURL, forKey: .backgroundImageURL)
-        try container.encode(backgroundOpacity, forKey: .backgroundOpacity)
-        try container.encode(backgroundBlur, forKey: .backgroundBlur)
-        try container.encode(backgroundTinted, forKey: .backgroundTinted)
-        try container.encode(backgroundFills, forKey: .backgroundFills)
         try container.encode(titleBarLogoType, forKey: .titleBarLogoType)
         try container.encode(titleBarText, forKey: .titleBarText)
         try container.encodeIfPresent(titleBarImageURL, forKey: .titleBarImageURL)
 
-        try container.encode(gameWindowTitle, forKey: .gameWindowTitle)
         try container.encode(gameWindowType, forKey: .gameWindowType)
         try container.encode(gameWindowWidth, forKey: .gameWindowWidth)
         try container.encode(gameWindowHeight, forKey: .gameWindowHeight)
         try container.encode(launcherVisibility, forKey: .launcherVisibility)
         try container.encode(processPriority, forKey: .processPriority)
         try container.encode(prelaunchCommand, forKey: .prelaunchCommand)
-        try container.encode(prelaunchWaitForCompletion, forKey: .prelaunchWaitForCompletion)
         try container.encode(gameArguments, forKey: .gameArguments)
         try container.encode(jvmArguments, forKey: .jvmArguments)
         try container.encode(memory, forKey: .memory)
-        try container.encode(memoryOptimize, forKey: .memoryOptimize)
+        try container.encode(memoryMode, forKey: .memoryMode)
+        try container.encode(garbageCollector, forKey: .garbageCollector)
     }
 
     /// 合并短时间内的多次变更，避免每个字段改动都触发一次写盘。
@@ -405,6 +422,8 @@ class LauncherConfig: Codable {
         case ignoreLauncherUpdates
         case downloadSourcePolicy
         case homepageType
+        case homepagePreset
+        case homepageURL
         case enabledFlags
         case customJavaRuntimes
         case theme
@@ -413,38 +432,56 @@ class LauncherConfig: Codable {
         case themeBrightness
         case downloadMaxThreads
         case downloadSpeedLimit
+        case autoSetGameLanguage
         case separatesVersionListSource
         case versionListSourcePolicy
         case customCacheDirectory
-        case backgroundImageURL
-        case backgroundOpacity
-        case backgroundBlur
-        case backgroundTinted
-        case backgroundFills
         case titleBarLogoType
         case titleBarText
         case titleBarImageURL
-        case gameWindowTitle
         case gameWindowType
         case gameWindowWidth
         case gameWindowHeight
         case launcherVisibility
         case processPriority
         case prelaunchCommand
-        case prelaunchWaitForCompletion
         case gameArguments
         case jvmArguments
         case memory
-        case memoryOptimize
+        case memoryMode
+        case garbageCollector
     }
 
     enum HomepageType: String, Codable, CaseIterable, CustomStringConvertible {
-        case empty, demo
+        /// 启动器主页：账号皮肤、Minecraft 新闻、更新公告。
+        case dashboard
+        /// 预设主页（当前只有「Minecraft 新闻」）。
+        case preset
+        /// 读取本地 Custom.xaml（与 PCL2 相同的主页文件）。
+        case local
+        /// 联网下载 Custom.xaml。
+        case remote
+        /// 控件预览（开发用）。
+        case demo
 
         var description: String {
             switch self {
-            case .empty: "空白"
+            case .dashboard: "启动器主页"
+            case .preset: "预设"
+            case .local: "读取本地文件"
+            case .remote: "联网更新"
             case .demo: "[内置] 控件预览"
+            }
+        }
+    }
+
+    /// 预设主页。
+    enum HomepagePreset: String, Codable, CaseIterable, CustomStringConvertible {
+        case minecraftNews
+
+        var description: String {
+            switch self {
+            case .minecraftNews: "Minecraft 新闻"
             }
         }
     }
@@ -452,11 +489,14 @@ class LauncherConfig: Codable {
 
 /// 标题栏 Logo 的显示类型。
 public enum TitleBarLogoType: String, Codable, CaseIterable, CustomStringConvertible {
+    /// 不显示任何标识（PCL2 的「无」）。
+    case none
     case logo, text, image
 
     public var description: String {
         switch self {
-        case .logo: "默认 Logo"
+        case .none: "无"
+        case .logo: "默认"
         case .text: "文本"
         case .image: "图片"
         }
