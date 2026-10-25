@@ -24,7 +24,7 @@ class UpdateService {
             if manually {
                 hint("正在检查更新……")
             }
-            let version: UpdateModel.Version?
+            let version: UpdateInfo?
             do {
                 version = try await UpdateManager.shared.checkUpdates()
             } catch {
@@ -64,10 +64,10 @@ class UpdateService {
                 return
             }
             
-            hint("正在下载并安装更新，完成后 PCL.Swift 会自动重启……")
+            hint("正在从 GitHub 下载更新，完成后 PCL.Swift 会自动重启……")
             do {
-                let useMirror = await LocaleUtils.isInChinaMainland(strict: false)
-                try await UpdateManager.shared.installUpdate(version, useMirror: useMirror)
+                // 更新渠道只有 GitHub 一处，没有镜像可选（旧渠道的 useMirror 参数已删除）。
+                try await UpdateManager.shared.installUpdate(version)
             } catch {
                 err("更新启动器失败：\(error.localizedDescription)")
                 hint("更新失败：\(error.localizedDescription)", type: .critical)

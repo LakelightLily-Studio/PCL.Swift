@@ -17,7 +17,7 @@ struct DashboardHomepageView: View {
     @State private var news: [MinecraftNewsItem] = []
     @State private var newsFailed: Bool = false
     @State private var loadingNews: Bool = false
-    @State private var latestVersion: UpdateModel.Version?
+    @State private var latestVersion: UpdateInfo?
 
     var body: some View {
         CardContainer {
