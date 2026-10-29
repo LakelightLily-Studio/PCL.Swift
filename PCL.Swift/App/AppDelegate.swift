@@ -163,15 +163,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !LauncherConfig.shared.hasEnteredLauncher && startupFlow.stage == .launcher {
             MessageBoxManager.shared.showText(
                 title: "欢迎使用 PCL.Swift！",
-                content: "PCL.Swift 是 Plain Craft Launcher 的非官方衍生版，使用 SwiftUI 框架完全重构了 PCL 以支持 macOS。\n本启动器还处于开发阶段，有许多功能尚未完成，Bug 可能也比较多……\n若要获取帮助或查看更多信息，请访问项目的 GitHub 仓库！\n\n在开始使用前，请先阅读 Cylorine Studio 隐私政策。",
+                content: "PCL.Swift 是 Plain Craft Launcher 的非官方衍生版，使用 SwiftUI 框架完全重构了 PCL 以支持 macOS。\n本启动器还处于开发阶段，有许多功能尚未完成，Bug 可能也比较多……\n若要获取帮助或查看更多信息，请访问项目的 GitHub 仓库！",
                 level: .info,
                 .init(id: 0, label: "打开 GitHub 仓库", type: .normal) {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/functy23/PCL.Swift")!)
+                    NSWorkspace.shared.open(URL(string: "https://github.com/LakelightLily-Studio/PCL.Swift")!)
                 },
-                .init(id: 1, label: "查看隐私政策", type: .normal) {
-                    NSWorkspace.shared.open(URL(string: "https://cylorine.studio/privacy")!)
-                },
-                .init(id: 2, label: "开始使用", type: .highlight)
+                .init(id: 1, label: "开始使用", type: .highlight)
             ) { _ in
                 LauncherConfig.shared.hasEnteredLauncher = true
             }

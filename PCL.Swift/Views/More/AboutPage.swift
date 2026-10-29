@@ -17,22 +17,15 @@ struct AboutPage: View {
                                 .init("GitHub 主页", "https://github.com/LTCatt"),
                                 .init("前往赞助", "https://afdian.com/a/LTCat"))
                     
-                    ProfileView(.local(.anemoFlower), "风花AnemoFlower", "PCL.Mac 的作者",
-                                .init("GitHub 主页", "https://github.com/AnemoFlower"),
-                                .init("Bilibili 主页", "https://space.bilibili.com/3461564927576750"))
-                    
                     ProfileView(.local(.functy), "Functy", "PCL.Swift 的作者",
                                 .init("GitHub 主页", "https://github.com/functy23"))
                     
                     ProfileView(.local(.lakelightLily), "LakelightLily Studio", "PCL.Swift 的开发团队",
-                                .init("GitHub 主页", "https://github.com/functy23"))
-                    
-                    ProfileView(.local(.cylorineStudio), "Cylorine Studio", "PCL.Mac 的开发团队",
-                                .init("GitHub 主页", "https://github.com/CylorineStudio"))
+                                .init("GitHub 主页", "https://github.com/LakelightLily-Studio"))
                     
                     ProfileView(.local(.pclMac), "PCL.Swift", "当前版本：\(Metadata.appVersion) (\(Metadata.bundleVersion))",
-                                .init("GitHub 仓库", "https://github.com/functy23/PCL.Swift"),
-                                .init("问题反馈", "https://github.com/functy23/PCL.Swift/issues"))
+                                .init("GitHub 仓库", "https://github.com/LakelightLily-Studio/PCL.Swift"),
+                                .init("问题反馈", "https://github.com/LakelightLily-Studio/PCL.Swift/issues"))
                 }
             }
             .cardIndex(1)
@@ -47,6 +40,9 @@ struct AboutPage: View {
                     
                     ProfileView(.local(.bangbang93), "bangbang93", "提供 BMCLAPI 镜像源，详见 https://bmclapi.bangbang93.com",
                                 .init("前往赞助", "https://afdian.com/a/bangbang93"))
+
+                    ProfileView(.local(.swiftCraftLauncher), "Swift Craft Launcher", "感谢 SCL 开发团队与我们的持续交流与相互启发。",
+                                .init("GitHub 仓库", "https://github.com/suhang12332/Swift-Craft-Launcher"))
                 }
             }
             .cardIndex(2)
