@@ -31,6 +31,7 @@ public enum SettingsTransferService {
         var themeHue: Double?
         var themeSaturation: Double?
         var themeBrightness: Double?
+        var navigationBarBackground: String?
         var titleBarLogoType: String?
         var titleBarText: String?
         var gameWindowType: String?
@@ -64,6 +65,7 @@ public enum SettingsTransferService {
             themeHue: config.themeHue,
             themeSaturation: config.themeSaturation,
             themeBrightness: config.themeBrightness,
+            navigationBarBackground: config.navigationBarBackground.rawValue,
             titleBarLogoType: config.titleBarLogoType.rawValue,
             titleBarText: config.titleBarText,
             gameWindowType: config.gameWindowType.rawValue,
@@ -118,6 +120,7 @@ public enum SettingsTransferService {
         apply(settings.themeBrightness) { config.themeBrightness = $0 }
 
 
+        if let raw = settings.navigationBarBackground, let value = NavigationBarBackground(rawValue: raw) { config.navigationBarBackground = value; applied += 1 }
         if let raw = settings.titleBarLogoType, let type = TitleBarLogoType(rawValue: raw) { config.titleBarLogoType = type; applied += 1 }
         apply(settings.titleBarText) { config.titleBarText = $0 }
 

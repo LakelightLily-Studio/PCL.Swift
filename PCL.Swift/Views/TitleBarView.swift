@@ -23,8 +23,7 @@ struct TitleBarView: View {
     
     var body: some View {
         ZStack(alignment: .leading) {
-            Rectangle()
-                .fill(Color.color3)
+            NavigationBarBackgroundView()
             Group {
                 if router.isSubPage {
                     HStack {

@@ -179,6 +179,10 @@ class LauncherConfig: Codable {
 
     // MARK: - 外观
 
+    /// 导航栏（标题栏）背景样式：纯色或主题色 + 线格。
+    public var navigationBarBackground: NavigationBarBackground = .theme {
+        didSet { LauncherConfig.markDirty() }
+    }
     /// 标题栏 Logo 类型。
     public var titleBarLogoType: TitleBarLogoType = .logo {
         didSet { LauncherConfig.markDirty() }
@@ -325,6 +329,7 @@ class LauncherConfig: Codable {
         self.resourceFileNameFormat = try container.decodeIfPresent(String.self, forKey: .resourceFileNameFormat) ?? ResourceFileName.defaultTemplate
         self.resourceTitleStyle = (try? container.decodeIfPresent(ResourceTitleStyle.self, forKey: .resourceTitleStyle)) ?? .nameFirst
 
+        self.navigationBarBackground = (try? container.decodeIfPresent(NavigationBarBackground.self, forKey: .navigationBarBackground)) ?? .theme
         self.titleBarLogoType = (try? container.decodeIfPresent(TitleBarLogoType.self, forKey: .titleBarLogoType)) ?? .logo
         self.titleBarText = try container.decodeIfPresent(String.self, forKey: .titleBarText) ?? "PCL.Swift"
         self.titleBarImageURL = try container.decodeIfPresent(URL.self, forKey: .titleBarImageURL)
@@ -379,6 +384,7 @@ class LauncherConfig: Codable {
         try container.encode(resourceFileNameFormat, forKey: .resourceFileNameFormat)
         try container.encode(resourceTitleStyle, forKey: .resourceTitleStyle)
 
+        try container.encode(navigationBarBackground, forKey: .navigationBarBackground)
         try container.encode(titleBarLogoType, forKey: .titleBarLogoType)
         try container.encode(titleBarText, forKey: .titleBarText)
         try container.encodeIfPresent(titleBarImageURL, forKey: .titleBarImageURL)
@@ -467,6 +473,7 @@ class LauncherConfig: Codable {
         case customCacheDirectory
         case resourceFileNameFormat
         case resourceTitleStyle
+        case navigationBarBackground
         case titleBarLogoType
         case titleBarText
         case titleBarImageURL
@@ -530,6 +537,21 @@ class LauncherConfig: Codable {
             switch self {
             case .minecraftNews: "Minecraft 新闻"
             }
+        }
+    }
+}
+
+/// 导航栏（标题栏）背景样式。
+public enum NavigationBarBackground: String, Codable, CaseIterable, CustomStringConvertible {
+    /// 纯主题色。
+    case theme
+    /// 主题色 + 白色线格。
+    case lines
+
+    public var description: String {
+        switch self {
+        case .theme: "纯色"
+        case .lines: "线格"
         }
     }
 }

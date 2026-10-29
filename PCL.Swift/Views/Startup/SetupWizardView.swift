@@ -5,10 +5,12 @@
 //  首次启动的设置向导：欢迎 → 账号 → Java → 主题 → 完成。
 //
 //  设计上的几点取舍：
-//  - 标题左对齐并渐显（`titleAppeared`），不居中——启动器主体也是左对齐布局，
-//    居中标题会显得像另一套设计语言；
-//  - 步骤条用数字 1–5，当前步用主题色填充、已完成步用浅一档；
+//  - 向导阶段顶栏就是启动器那块 48pt 主色栏，当前步骤的大标题显示在栏内；
+//    页面内不再重复一份标题，标题左对齐，与启动器主体一致；
+//  - 步骤条用数字 1–5，当前步用主题色填充、已完成步用浅一档；连线是连续进度条，
+//    按步骤从左往右逐步填充，不是整段变色；
 //  - 「跳过」只跳过当前这一步（进入下一步），最后一步换成「完成」；
+//  - 完成页是独立的庆祝页：只保留居中「设置完成」、左下角彩带和底部「完成」；
 //  - 账号/Java/主题都是可用的最小控件，不是占位卡片；只有「正版账号登录」
 //    仍需要主界面侧边栏的设备码流程，这里给一句提示。
 //
@@ -20,9 +22,8 @@ struct SetupWizardView: View {
     let onFinish: () -> Void
 
     @StateObject private var themeManager: ThemeManager = .shared
+    @ObservedObject private var configObserver: LauncherConfigObserver = .shared
     @State private var step: Step = .welcome
-    @State private var titleAppeared: Bool = false
-    @State private var contentAppeared: Bool = false
 
     /// 账号视图模型：正版登录的设备码流程要复用它，因此向导阶段就建一个实例。
     /// 它自身把 `accounts` / `currentAccountId` 同步进 `LauncherConfig`。
@@ -37,6 +38,7 @@ struct SetupWizardView: View {
     enum Step: Int, CaseIterable {
         case welcome, account, java, theme, done
 
+        /// 步骤条上的短名。
         var title: String {
             switch self {
             case .welcome: "欢迎"
@@ -47,94 +49,128 @@ struct SetupWizardView: View {
             }
         }
 
+        /// 顶栏里显示的大标题。欢迎步沿用原来的完整欢迎语。
+        var pageTitle: String {
+            switch self {
+            case .welcome: "欢迎来到 PCL.Swift"
+            case .account: "登录账号"
+            case .java: "选择 Java"
+            case .theme: "选择主题"
+            case .done: "完成配置"
+            }
+        }
+
         var number: Int { rawValue + 1 }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            stepIndicator
-                .padding(.top, 22)
-            Divider()
-                .padding(.top, 18)
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        ZStack {
+            Color.colorBackground
+            WizardGridBackground()
+
+            // 完成页的彩带从窗口左下角喷出，画在内容下面，不挡按钮点击。
+            if step == .done {
+                ConfettiView()
+            }
+
+            VStack(spacing: 0) {
+                titleBar
+                VStack(alignment: .leading, spacing: 0) {
+                    if step != .done {
+                        WizardEntrance(index: 0) {
+                            VStack(spacing: 0) {
+                                stepIndicator
+                                Divider()
+                                    .padding(.top, 18)
+                            }
+                        }
+                    }
+
+                    WizardEntrance(index: 1, enabled: step != .done) {
+                        content
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    }
+                    .id(step)
+                    .padding(.top, step == .done ? 0 : 20)
+
+                    WizardEntrance(index: 2) {
+                        footer
+                    }
+                }
+                .padding(.horizontal, 40)
                 .padding(.top, 20)
-            footer
+                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
         }
-        .padding(.horizontal, 40)
-        .padding(.top, 42)
-        .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.colorBackground)
         .ignoresSafeArea()
-        .onAppear {
-            guard !titleAppeared else { return }
-            withAnimation(.easeOut(duration: 0.45)) {
-                titleAppeared = true
-            }
-            withAnimation(.easeOut(duration: 0.45).delay(0.12)) {
-                contentAppeared = true
-            }
-        }
-        .onChange(of: step) { _ in
-            // 切步时让内容做一次轻微的渐显，避免"啪"地换页。
-            contentAppeared = false
-            withAnimation(.easeOut(duration: 0.3)) {
-                contentAppeared = true
-            }
-        }
     }
 
-    // MARK: - 顶部标题
+    // MARK: - 顶部标题栏
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("欢迎来到 PCL.Swift")
-                .font(.system(size: 30, weight: .bold))
-                .foregroundStyle(Color.color1)
-                // 文字渐显：位移 + 透明度，起手位置略低。
-                .opacity(titleAppeared ? 1 : 0)
-                .offset(y: titleAppeared ? 0 : 10)
-
-            Text("几步完成基础配置，之后随时可以在「设置」里修改。")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.colorGray2)
-                .opacity(titleAppeared ? 1 : 0)
-                .offset(y: titleAppeared ? 0 : 10)
+    /// 与启动器主体同一块 48pt 主色栏，只是内容换成当前步骤的大标题。
+    ///
+    /// 三色按钮由系统画在透明标题栏里，文字按 `trafficLightReservedWidth` 让开它们；
+    /// 向导页里不再重复一份页面内标题。
+    private var titleBar: some View {
+        ZStack(alignment: .leading) {
+            NavigationBarBackgroundView()
+            MyText(step.pageTitle, size: 22, color: .white)
+                .id(step)
+                .transition(.opacity)
+                .lineLimit(1)
+                .padding(.leading, TitleBarView.trafficLightReservedWidth)
         }
+        .frame(height: AppWindow.titleBarHeight)
     }
 
     // MARK: - 步骤条
 
     private var stepIndicator: some View {
-        HStack(spacing: 0) {
-            ForEach(Step.allCases, id: \.self) { item in
-                if item != .welcome {
-                    // 连接线：已走过的部分用主题浅色，未走的用灰阶。
-                    Rectangle()
-                        .fill(item.rawValue <= step.rawValue ? Color.color4 : Color.colorGray5)
-                        .frame(height: 2)
+        GeometryReader { proxy in
+            let columnWidth: CGFloat = proxy.size.width / CGFloat(Step.allCases.count)
+            let startX: CGFloat = columnWidth / 2
+            let endX: CGFloat = proxy.size.width - columnWidth / 2
+            let progress: CGFloat = CGFloat(step.rawValue) / CGFloat(Step.allCases.count - 1)
+
+            ZStack(alignment: .topLeading) {
+                // 底轨：从第一个圆心的位置画到最后一个圆心。
+                Capsule()
+                    .fill(Color.colorGray5)
+                    .frame(width: max(0, endX - startX), height: 2)
+                    .offset(x: startX, y: 11)
+
+                // 进度：按当前步骤逐步填充，而不是整段一起变色。
+                Capsule()
+                    .fill(Color.color4)
+                    .frame(width: max(0, (endX - startX) * progress), height: 2)
+                    .offset(x: startX, y: 11)
+                    .animation(.easeInOut(duration: 0.45), value: step)
+
+                HStack(spacing: 0) {
+                    ForEach(Step.allCases, id: \.self) { item in
+                        VStack(spacing: 6) {
+                            ZStack {
+                                Circle()
+                                    .fill(circleFill(for: item))
+                                Text("\(item.number)")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(item == step ? Color.white : (item.rawValue < step.rawValue ? Color.color2 : Color.colorGray3))
+                            }
+                            .frame(width: 24, height: 24)
+                            .scaleEffect(item == step ? 1 : 0.92)
+
+                            Text(item.title)
+                                .font(.system(size: 11))
+                                .foregroundStyle(item == step ? Color.color2 : Color.colorGray2)
+                        }
                         .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 8)
-                }
-
-                VStack(spacing: 6) {
-                    ZStack {
-                        Circle()
-                            .fill(circleFill(for: item))
-                        Text("\(item.number)")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(item == step ? Color.white : (item.rawValue < step.rawValue ? Color.color2 : Color.colorGray3))
                     }
-                    .frame(width: 24, height: 24)
-
-                    Text(item.title)
-                        .font(.system(size: 11))
-                        .foregroundStyle(item == step ? Color.color2 : Color.colorGray2)
                 }
             }
         }
+        .frame(height: 44)
         .animation(.easeInOut(duration: 0.25), value: step)
     }
 
@@ -157,12 +193,14 @@ struct SetupWizardView: View {
             case .done: doneStep
             }
         }
-        .opacity(contentAppeared ? 1 : 0)
-        .offset(y: contentAppeared ? 0 : 8)
     }
 
     private var welcomeStep: some View {
         VStack(alignment: .leading, spacing: 16) {
+            Text("几步完成基础配置，之后随时可以在「设置」里修改。")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.colorGray2)
+
             HStack(spacing: 18) {
                 Image(.iconAppIcon)
                     .resizable()
@@ -344,6 +382,15 @@ struct SetupWizardView: View {
 
     private var themeStep: some View {
         VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Text("导航栏背景")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.color1)
+                MySelect(navigationBarBackgroundBinding, entries: NavigationBarBackground.allCases)
+                    .frame(width: 160, height: 26)
+                Spacer(minLength: 0)
+            }
+
             Text("选一个主题色，点击立即生效。")
                 .font(.system(size: 13))
                 .foregroundStyle(Color.colorGray2)
@@ -367,6 +414,16 @@ struct SetupWizardView: View {
             .alwaysShowScrollIndicators()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+    }
+
+    private var navigationBarBackgroundBinding: Binding<NavigationBarBackground> {
+        Binding(
+            get: { LauncherConfig.shared.navigationBarBackground },
+            set: { value in
+                LauncherConfig.shared.navigationBarBackground = value
+                configObserver.touch()
+            }
+        )
     }
 
     private func themeCard(_ theme: Theme) -> some View {
@@ -432,34 +489,8 @@ struct SetupWizardView: View {
     // MARK: 完成
 
     private var doneStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("配置完成")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color.color1)
-            Text("点击「完成」进入启动器。之后可以在「设置」里调整下载源、Java、主题等全部选项。")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.colorGray2)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: 6) {
-                summaryLine("账号", accountVM.accounts.isEmpty ? "未配置" : "\(accountVM.accounts.count) 个，当前 \(accountVM.currentAccount?.profile.name ?? "-")")
-                summaryLine("Java", javaRuntimes.isEmpty ? "未检测到" : "\(javaRuntimes.count) 个")
-                summaryLine("主题", themeManager.current.description)
-            }
-            .padding(.top, 4)
-        }
-    }
-
-    private func summaryLine(_ label: String, _ value: String) -> some View {
-        HStack(spacing: 10) {
-            Text(label)
-                .font(.system(size: 12))
-                .foregroundStyle(Color.colorGray3)
-                .frame(width: 48, alignment: .leading)
-            Text(value)
-                .font(.system(size: 12))
-                .foregroundStyle(Color.color1)
-        }
+        CompletionTitle()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
 
@@ -476,7 +507,7 @@ struct SetupWizardView: View {
 
             Spacer()
 
-            if step != .welcome {
+            if step != .welcome && step != .done {
                 MyButton("上一步") {
                     goBack()
                 }
@@ -499,11 +530,58 @@ struct SetupWizardView: View {
             onFinish()
             return
         }
-        step = next
+        withAnimation(.easeInOut(duration: 0.25)) {
+            step = next
+        }
     }
 
     private func goBack() {
         guard let previous = Step(rawValue: step.rawValue - 1) else { return }
-        step = previous
+        withAnimation(.easeInOut(duration: 0.25)) {
+            step = previous
+        }
+    }
+}
+
+/// 向导页里的分段入场动画：曲线、时长和错峰都复用启动器其他页面的 PageEntrance。
+private struct WizardEntrance<Content: View>: View {
+    let index: Int
+    let enabled: Bool
+    private let content: () -> Content
+
+    @State private var appeared: Bool = false
+
+    init(index: Int, enabled: Bool = true, @ViewBuilder content: @escaping () -> Content) {
+        self.index = index
+        self.enabled = enabled
+        self.content = content
+    }
+
+    var body: some View {
+        content()
+            .modifier(PageEntranceShape(progress: appeared ? 1 : 0, enabled: enabled))
+            .animation(enabled ? PageEntrance.animation(for: index) : nil, value: appeared)
+            .onAppear {
+                guard !appeared else { return }
+                appeared = true
+            }
+    }
+}
+
+/// 完成页中央的大标题：弹簧缩放入场，配合左下角喷出的彩带。
+private struct CompletionTitle: View {
+    @State private var appeared: Bool = false
+
+    var body: some View {
+        MyText("设置完成", size: 44, color: .color1)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .opacity(appeared ? 1 : 0)
+            .scaleEffect(appeared ? 1 : 0.82)
+            .offset(y: appeared ? 0 : 10)
+            .animation(.spring(response: 0.55, dampingFraction: 0.72).delay(0.08), value: appeared)
+            .onAppear {
+                guard !appeared else { return }
+                appeared = true
+            }
     }
 }

@@ -88,6 +88,14 @@ struct PersonalizationSettingsPage: View {
     private var titleBarCard: some View {
         MyCard("标题栏", foldable: false) {
             VStack(alignment: .leading, spacing: 10) {
+                SettingRow("导航栏背景", labelWidth: 120) {
+                    MySelect(Binding(
+                        get: { LauncherConfig.shared.navigationBarBackground },
+                        set: { LauncherConfig.shared.navigationBarBackground = $0; config.touch() }
+                    ), entries: NavigationBarBackground.allCases)
+                    .frame(maxWidth: .infinity)
+                }
+
                 HStack(spacing: 26) {
                     ForEach(TitleBarLogoType.allCases, id: \.self) { type in
                         MyComboBox(checked: logoTypeBinding(type), text: type.description, allowsUncheck: false)
