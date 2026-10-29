@@ -88,6 +88,30 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
 删掉源码树里的这类文件后若构建仍报 `lstat(...): No such file or directory`，那是 DerivedData 里的陈旧快照，
 清一次构建缓存即可，不是源码问题。
 
+### 开发期专用能力只在 Debug 构建里
+
+`Configs/Debug.xcconfig` 定义了 `SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) PCL_DEV_TOOLS`，
+`Release.xcconfig` 不定义。所以 `#if PCL_DEV_TOOLS` 包住的代码在正式版里**根本不参与编译**，
+不是「编进去再在运行时藏起来」——没有可被误触发的入口，也没有多余符号。
+实现在 `PCL.Swift/App/DevTools.swift`（整个文件在这个条件里）：
+
+| 快捷键 | 作用 |
+|---|---|
+| ⌘R | 重播「开场动画 → 设置向导 → 启动器」整段流程（`StartupFlow.restartOnboarding()`）。不改 `hasCompletedOnboarding`：重播只是回看流程，中途退出下次仍直接进启动器，走完向导时 `finishWizard()` 会重新置 true |
+| 1 / 2 / 3 / 4 | 切到顶栏的 启动 / 下载 / 设置 / 更多 |
+
+约定：
+
+- 新增开发期能力一律走这个条件，**不要**用 `FeatureFlag`、环境变量或启动参数做门控：那些会被正式版带上，
+  还要额外维护「什么时候不该触发」的判断。
+- 调用点也要包在 `#if PCL_DEV_TOOLS` 里（参考 `AppDelegate.addEscapeMonitor`），否则 Release 下会报找不到符号。
+- 快捷键一律在 `NSEvent` 的本地监听里判断，副作用跳回主线程执行；弹窗打开时不拦截（对话框要用 Esc / 回车），
+  文本框正在编辑时数字键属于输入内容，也不能拦截。
+- 联机页不占数字键：它由功能开关控制，同一个键不该在不同开关状态下跳到不同页面。
+- 验证剔除是否真的生效：Release 构建后 `grep -ac '开发工具' .../PCL.Swift.app/Contents/MacOS/PCL.Swift` 应为 0，
+  `nm -U` 里不应出现 `DevShortcuts`；同一份检查在 Debug 产物上应分别得到 1 与若干符号。
+- demo 分支的 `DemoState` 是另一回事（重播卡片进入动画 + 演示资源快照），不要和这里混用。
+
 ### 图标只有 Xcode 26 能编
 
 - `PCL.Swift/AppIcon.icon` 是 Icon Composer 格式，只有 Xcode 26 的 `actool` 会把它编译成 `AppIcon.icns`，
@@ -159,6 +183,18 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
   否则用户拖动改变窗口大小后按钮会错位。`TitleBarView.trafficLightReservedWidth` 与它配套。
 - 消息框与提示条挂在 `RootView` 而不是 `ContentView`：向导阶段要弹正版账号的设备码，那时
   `ContentView` 还不存在。遮罩层要 `.ignoresSafeArea()`，否则顶部会缺一条（各阶段视图本身都忽略安全区）。
+- 向导阶段的顶栏与启动器共用同一块 48pt 主色栏：栏内显示当前步骤的大标题（欢迎来到 PCL.Swift /
+  登录账号 / 选择 Java / 选择主题 / 完成配置），页面内不再重复标题；标题左侧按
+  `TitleBarView.trafficLightReservedWidth` 让开三色按钮。改标题文案时改
+  `SetupWizardView.Step.pageTitle`，不要在两处各写一份。
+- 完成页是独立的庆祝页：不显示步骤条、分隔线和配置摘要，只保留居中「设置完成」、左下角彩带和底部「完成」；
+  彩带在 `Views/Startup/ConfettiView.swift`，用 Canvas + TimelineView 绘制，粒子种子固定，
+  不要改成每帧随机（否则同一场动画会抖动）。
+- 向导背景是固定 64pt 线距的无限纯网格（只有横竖线，没有对角线），实现在
+  `Views/Startup/WizardGridBackground.swift`；不要改回 5×5 固定分割或对角线，否则窗口变大时会被拉稀。
+- 导航栏背景有「纯色 / 线格」两种，存在 `LauncherConfig.navigationBarBackground`，由
+  `Components/NavigationBarBackgroundView.swift` 统一绘制，向导顶栏与启动器顶栏共用；
+  「线格」是主题色底 + 白色网格。
 - 窗口的 `contentView` 是普通 `NSView` 包着 `NSHostingView`（`sizingOptions = []`）：直接把 hosting view
   当 contentView 时，SwiftUI 的理想尺寸会顶穿窗口（向导的 ScrollView 曾把窗口撑到 1361pt）。
 
@@ -370,7 +406,7 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
 
 ## 启动器更新渠道
 
-- 检查更新读的是**本源仓库的 GitHub Release**（`functy23/PCL.Swift`），不再读 Cylorine Studio 的
+- 检查更新读的是**本源仓库的 GitHub Release**（`LakelightLily-Studio/PCL.Swift`），不再读 Cylorine Studio 的
   `update.json`：那份元数据不跟随本仓库发版，等于永远检查不到新版本。实现在
   `PCL.Swift/Managers/UpdateManager.swift`，DTO 在 Core 的 `GitHubRelease`。
 - 只认**已发布且非预发布**的 Release：草稿与 prerelease 不推给普通用户（未登录时草稿本来也不返回）。
