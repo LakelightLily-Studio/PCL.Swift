@@ -3,10 +3,10 @@
 <div align="center">
   <img alt="Logo" src=".github/assets/icon.png" width="140">
   <h1>PCL.Swift</h1>
-  <img src="https://img.shields.io/github/stars/functy23/PCL.Swift?style=flat&color=orange" alt="Stars">
+  <img src="https://img.shields.io/github/stars/LakelightLily-Studio/PCL.Swift?style=flat&color=orange" alt="Stars">
   <img src="https://img.shields.io/badge/macOS-12.0%2B-orange?logo=macos" alt="Minimum OS Version">
-  <img src="https://img.shields.io/github/commit-activity/m/functy23/PCL.Swift?style=flat&color=orange" alt="Activity">
-  <img src="https://img.shields.io/github/contributors/functy23/PCL.Swift?style=flat&color=orange" alt="Contributors">
+  <img src="https://img.shields.io/github/commit-activity/m/LakelightLily-Studio/PCL.Swift?style=flat&color=orange" alt="Activity">
+  <img src="https://img.shields.io/github/contributors/LakelightLily-Studio/PCL.Swift?style=flat&color=orange" alt="Contributors">
 </div>
 <br>
 
@@ -21,7 +21,7 @@ PCL.Swift 是 [Plain Craft Launcher](https://github.com/Meloong-Git/PCL)（由 [
   </tr>
 </table>
 
-问题反馈：请前往 [Issues](https://github.com/functy23/PCL.Swift/issues)。
+问题反馈：请前往 [Issues](https://github.com/LakelightLily-Studio/PCL.Swift/issues)。
 
 **请不要在 PCL 官方版本 / 其它版本相关仓库或群聊中反馈关于 PCL.Swift 的问题。**
 
@@ -49,7 +49,7 @@ PCL.Swift 是 [Plain Craft Launcher](https://github.com/Meloong-Git/PCL)（由 [
 - **正版账号皮肤头像**：Mojang 的纹理服务只返回 `http://` 地址，此前被 App Transport Security 拦下，导致正版账号一直显示默认皮肤；现按域名开例外，头像正常加载。
 
 ## 下载
-你可以在 [Releases](https://github.com/functy23/PCL.Swift/releases) 中下载 PCL.Swift（Universal）。
+你可以在 [Releases](https://github.com/LakelightLily-Studio/PCL.Swift/releases) 中下载 PCL.Swift（Universal）。
 
 ## 环境要求
 

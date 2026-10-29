@@ -18,7 +18,7 @@ class UpdateManager {
     public static let shared: UpdateManager = .init()
 
     /// 更新来源仓库。
-    fileprivate static let repository: String = "functy23/PCL.Swift"
+    fileprivate static let repository: String = "LakelightLily-Studio/PCL.Swift"
     /// 一次取多少条 Release。20 条足够覆盖落后很多个版本的用户。
     private static let releasesPerPage: Int = 20
 

@@ -59,7 +59,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             let response = alert.runModal()
             if response == .alertFirstButtonReturn {
-                NSWorkspace.shared.open(URL(string: "https://github.com/functy23/PCL.Swift/issues/new")!)
+                NSWorkspace.shared.open(URL(string: "https://github.com/LakelightLily-Studio/PCL.Swift/issues/new")!)
             }
             exit(1)
         }

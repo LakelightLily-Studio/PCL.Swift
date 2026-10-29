@@ -12,7 +12,7 @@ import Testing
 struct GitHubReleaseTests {
     @Test(.enabled(if: TestEnvironment.networkAvailable))
     func decodesPublishedRelease() async throws {
-        let url: URL = URL(string: "https://api.github.com/repos/functy23/PCL.Swift/releases?per_page=5")!
+        let url: URL = URL(string: "https://api.github.com/repos/LakelightLily-Studio/PCL.Swift/releases?per_page=5")!
         let releases: [GitHubRelease] = try await HTTPClient.shared.get(
             url,
             headers: ["Accept": "application/vnd.github+json"],
@@ -45,7 +45,7 @@ struct GitHubReleaseTests {
       "tag_name": "v2.0.4",
       "name": "2.0.4",
       "body": "- 按架构分开构建",
-      "html_url": "https://github.com/functy23/PCL.Swift/releases/tag/v2.0.4",
+      "html_url": "https://github.com/LakelightLily-Studio/PCL.Swift/releases/tag/v2.0.4",
       "draft": false,
       "prerelease": false,
       "assets": [
@@ -63,7 +63,7 @@ struct GitHubReleaseTests {
       "tag_name": "v2.0.3",
       "name": "2.0.3",
       "body": "- 旧包",
-      "html_url": "https://github.com/functy23/PCL.Swift/releases/tag/v2.0.3",
+      "html_url": "https://github.com/LakelightLily-Studio/PCL.Swift/releases/tag/v2.0.3",
       "draft": false,
       "prerelease": false,
       "assets": [
