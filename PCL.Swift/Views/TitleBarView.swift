@@ -153,7 +153,6 @@ private struct PageButton: View {
         // 鼠标进入 100ms、离开 200ms；选中态切换同样 100ms。
         .animation(hovered ? .easeOut(duration: 0.1) : .easeOut(duration: 0.2), value: hovered)
         .animation(.easeOut(duration: 0.1), value: isRoot)
-        .pointingHandCursor()
     }
     
     private var foregroundColor: Color {

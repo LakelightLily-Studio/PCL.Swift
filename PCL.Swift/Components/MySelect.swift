@@ -82,7 +82,6 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
             presented.toggle()
         }
         .onHover { hovered = $0 }
-        .pointingHandCursor()
         .animation(.linear(duration: 0.1), value: hovered)
         .onChange(of: presented) { newValue in
             close()

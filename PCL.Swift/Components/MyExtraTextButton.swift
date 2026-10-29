@@ -46,7 +46,6 @@ struct MyExtraTextButton: View {
                 }
         )
         .onHover { hovered = $0 }
-        .pointingHandCursor()
         .scaleEffect(pressed ? 0.85 : 1, anchor: .center)
         .animation(.linear(duration: 0.15), value: hovered)
         .animation(.easeOut(duration: 0.15), value: pressed)

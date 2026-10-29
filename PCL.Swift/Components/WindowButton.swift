@@ -36,6 +36,5 @@ struct WindowButton: View {
             self.hovered = isHovered
         }
         .onTapGesture(perform: action)
-        .pointingHandCursor()
     }
 }

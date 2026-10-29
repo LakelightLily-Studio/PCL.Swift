@@ -167,7 +167,6 @@ struct HomepageDocumentView: View {
                 MyText(resolve(label), color: events.isEmpty ? .color1 : .color2)
                     .contentShape(.rect)
                     .onTapGesture { perform(events) }
-                    .pointingHandCursor(isEnabled: !events.isEmpty)
                     .frame(maxWidth: .infinity, alignment: alignment.frameAlignment)
             )
 

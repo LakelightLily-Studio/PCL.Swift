@@ -61,7 +61,6 @@ struct NewsHomepageView: View {
                 Spacer(minLength: 0)
             }
         }
-        .pointingHandCursor(isEnabled: item.link != nil)
         .onTapGesture {
             guard let link = item.link else { return }
             NSWorkspace.shared.open(link)

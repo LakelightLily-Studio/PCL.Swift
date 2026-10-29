@@ -117,7 +117,6 @@ private struct RouteView: View {
         .background(hovered ? Color.color2.opacity(0.1) : .clear)
         .foregroundStyle(selected ? Color.color3 : .color1)
         .contentShape(Rectangle())
-        .pointingHandCursor()
         .onHover { isHovered in
             guard hovered != isHovered else { return }
             hovered = isHovered

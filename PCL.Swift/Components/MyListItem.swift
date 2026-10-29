@@ -83,7 +83,6 @@ struct MyListItem<Content: View>: View {
                 backgroundScale = hovered ? 1 : 0.92
             }
             .animation(.spring(response: 0.2), value: hovered)
-            .pointingHandCursor()
     }
 }
 
