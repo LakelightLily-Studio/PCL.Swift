@@ -1,6 +1,13 @@
 #include "Base.xcconfig"
 DEBUG_MODE = YES
 
+// 开发期专用能力的编译条件：⌘R 重播开场与设置向导、1–4 切顶栏页面。
+//
+// Release.xcconfig 刻意不定义它，所以这些代码在正式版里**根本不参与编译**，
+// 而不是"编进去再在运行时藏起来"——没有可被误触发的入口，也没有多余符号。
+// $(inherited) 保留 project 级的 DEBUG。
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) PCL_DEV_TOOLS
+
 // Debug 也开优化。
 //
 // 默认的 -Onone 下，SwiftUI 每次 body 求值都要走未内联的泛型派发、

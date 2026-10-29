@@ -78,7 +78,10 @@ final class StartupFlow: ObservableObject {
         }
     }
 
-    /// demo 分支用：把窗口缩回动画尺寸并重播整段开场。
+    /// 把窗口缩回动画尺寸并重播整段开场。
+    ///
+    /// 唯一调用方是开发期快捷键 ⌘R（`DevShortcuts`，只在 Debug 构建里存在），
+    /// 正式版没有调用点，会被 `DEAD_CODE_STRIPPING` 一并剥掉。
     func restartOnboarding() {
         window?.applyStartupStage(.onboarding, animated: true)
         withAnimation(.easeInOut(duration: 0.2)) {

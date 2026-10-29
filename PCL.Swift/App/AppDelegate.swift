@@ -203,7 +203,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func addEscapeMonitor() {
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             if event.keyCode == 53 {
                 DispatchQueue.main.async {
                     guard AppRouter.shared.isSubPage, MessageBoxManager.shared.currentMessageBox == nil else { return }
@@ -211,6 +211,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 return nil
             }
+            #if PCL_DEV_TOOLS
+            // 开发期快捷键（⌘R 重播引导流程、1–4 切顶栏页面），Debug 构建才编进来。
+            // 命中判断在事件层完成，副作用跳回主线程，与上面的 Esc 处理同一种写法。
+            if let shortcut = DevShortcuts.shortcut(for: event) {
+                DispatchQueue.main.async {
+                    guard let startupFlow = self?.startupFlow else { return }
+                    DevShortcuts.perform(shortcut, startupFlow: startupFlow)
+                }
+                return nil
+            }
+            #endif
             return event
         }
     }
