@@ -60,7 +60,7 @@ class MinecraftLaunchManager: ObservableObject {
                 }
             }
             self.loadingViewModel.text = "已启动游戏"
-            self.applyLauncherVisibility()
+            self.applyLauncherVisibility(instance: instance)
         }
         TaskManager.shared.execute(task: task, display: false) { _ in
             self.task = nil
@@ -93,8 +93,10 @@ class MinecraftLaunchManager: ObservableObject {
     /// applicationWillTerminate 里那几处落盘（配置、资源缓存、实例）
     /// 全部跳过，用户的改动就丢了。
     @MainActor
-    private func applyLauncherVisibility() {
-        let visibility: LauncherVisibility = .resolve(instance: nil)
+    private func applyLauncherVisibility(instance: MinecraftInstance) {
+        // 传实例而不是 nil：实例设置里也能单独覆盖「启动器可见性」，
+        // 以前固定传 nil，实例上的选择同样被忽略。
+        let visibility: LauncherVisibility = .resolve(instance: instance)
         switch visibility {
         case .keepVisible:
             break

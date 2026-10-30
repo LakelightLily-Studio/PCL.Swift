@@ -254,7 +254,12 @@ class LauncherConfig: Codable {
     }
     /// 全局默认启动器可见性。
     public var launcherVisibility: LauncherVisibility = .keepVisible {
-        didSet { LauncherConfig.markDirty() }
+        didSet {
+            LauncherConfig.markDirty()
+            // Core 的启动流程读的是 LauncherConfigDefaults 那份副本：不同步的话，
+            // 改完设置要等下次启动才生效，表现就是「这个选项没用」。
+            LauncherConfigDefaults.launcherVisibility = launcherVisibility
+        }
     }
     /// 全局默认进程优先级。
     public var processPriority: ProcessPriority = .normal {
