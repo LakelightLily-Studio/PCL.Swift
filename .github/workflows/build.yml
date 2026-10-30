@@ -80,6 +80,12 @@ jobs:
             : > ./Resources/Secrets.properties
           fi
 
+      - name: Sync changelog
+        # 主页预设「PCL.Swift 更新日志」读的是打进 App 的 Resources/CHANGELOG.md。
+        # 源头是仓库根目录的 CHANGELOG.md，构建前同步一次：
+        # 仓库里那份副本只是给本地开发和测试用的兜底，不能让它决定发出去的日志是哪一版。
+        run: cp CHANGELOG.md Resources/CHANGELOG.md
+
       - name: Import codesign cert
         # 只在「Release 且确实要签名」时导入：sign_app=false 走 ad-hoc 签名，
         # 没有 MACOS_* secret 也能产出可运行的包。

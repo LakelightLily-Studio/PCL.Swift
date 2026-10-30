@@ -93,11 +93,13 @@ class LauncherConfig: Codable {
     public var downloadSourcePolicy: DownloadSourcePolicy = .officialFirst {
         didSet { LauncherConfig.markDirty() }
     }
-    public var homepageType: HomepageType = .empty {
+    /// 主页类型。默认走「预设」：预设里的第一项是 PCL.Swift 更新日志，
+    /// 主页打开就能看到这一版改了什么，这也是当初删掉旧启动器主页后重新给主页内容的原因。
+    public var homepageType: HomepageType = .preset {
         didSet { LauncherConfig.markDirty() }
     }
-    /// 预设主页的选项。
-    public var homepagePreset: HomepagePreset = .minecraftNews {
+    /// 预设主页的选项。默认是第一项「PCL.Swift 更新日志」。
+    public var homepagePreset: HomepagePreset = .changelog {
         didSet { LauncherConfig.markDirty() }
     }
     /// 「联网更新」的下载地址（Custom.xaml）。空字符串表示未填写。
@@ -352,10 +354,11 @@ class LauncherConfig: Codable {
         self.multiplayerCustomPeer = try container.decodeIfPresent(String.self, forKey: .multiplayerCustomPeer)
         self.ignoreLauncherUpdates = try container.decodeIfPresent(Bool.self, forKey: .ignoreLauncherUpdates) ?? false
         self.downloadSourcePolicy = try container.decodeIfPresent(DownloadSourcePolicy.self, forKey: .downloadSourcePolicy) ?? .officialFirst
-        // 旧配置里存的是 "empty"（原来的空白主页），现在统一落到新的主页。
-        // 旧的 dashboard（启动器主页）已删除：解码失败时落到空白主页，升级不会被卡在未知枚举值上。
-        self.homepageType = (try? container.decodeIfPresent(HomepageType.self, forKey: .homepageType)) ?? .empty
-        self.homepagePreset = (try? container.decodeIfPresent(HomepagePreset.self, forKey: .homepagePreset)) ?? .minecraftNews
+        // 缺这个键的配置按默认主页处理（预设 → PCL.Swift 更新日志）。
+        // 用户自己选过的值照旧：旧配置里存着 "empty"（空白主页）就是空白，不会被这次改动改写。
+        // 旧的 dashboard（启动器主页）已删除：解码失败时落到默认预设，升级不会被卡在未知枚举值上。
+        self.homepageType = (try? container.decodeIfPresent(HomepageType.self, forKey: .homepageType)) ?? .preset
+        self.homepagePreset = (try? container.decodeIfPresent(HomepagePreset.self, forKey: .homepagePreset)) ?? .changelog
         self.homepageURL = try container.decodeIfPresent(String.self, forKey: .homepageURL) ?? ""
         self.enabledFlags = try container.decodeIfPresent(Set<FeatureFlag>.self, forKey: .enabledFlags)
         self.customJavaRuntimes = try container.decodeIfPresent([URL].self, forKey: .customJavaRuntimes) ?? []
@@ -568,7 +571,7 @@ class LauncherConfig: Codable {
     enum HomepageType: String, Codable, CaseIterable, CustomStringConvertible {
         /// 空白主页：右侧不渲染任何内容（原来的「启动器主页」整页已删除）。
         case empty
-        /// 预设主页（当前只有「Minecraft 新闻」）。
+        /// 预设主页（PCL.Swift 更新日志 / Minecraft 新闻）。
         case preset
         /// 读取本地 Custom.xaml（与 PCL2 相同的主页文件）。
         case local
@@ -604,11 +607,16 @@ class LauncherConfig: Codable {
     }
 
     /// 预设主页。
+    ///
+    /// 顺序即设置页下拉框的顺序，第一项是默认值：更新日志放最前面。
     enum HomepagePreset: String, Codable, CaseIterable, CustomStringConvertible {
+        /// 把每次发版的 CHANGELOG 当卡片铺在主页上（内容来自国内分发仓库）。
+        case changelog
         case minecraftNews
 
         var description: String {
             switch self {
+            case .changelog: "PCL.Swift 更新日志"
             case .minecraftNews: "Minecraft 新闻"
             }
         }

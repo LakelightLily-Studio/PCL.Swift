@@ -43,6 +43,9 @@ struct LaunchPage: View {
     @ViewBuilder
     private var presetView: some View {
         switch LauncherConfig.shared.homepagePreset {
+        case .changelog:
+            // 原生视图，不走自定义主页的解析：内容与渲染都在我们手里，也不需要那层测试期提示。
+            ChangelogHomepageView()
         case .minecraftNews:
             // 与原版一致：下载作者的 XAML 再解析；那台服务器不稳或地区不可达时，
             // 退回内置的官方新闻源渲染，保证这一项永远有内容。
