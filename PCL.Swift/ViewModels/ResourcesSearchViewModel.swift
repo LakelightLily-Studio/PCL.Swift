@@ -76,7 +76,9 @@ class ResourcesSearchViewModel: ObservableObject {
             self.query = query
             loadingVM.reset()
             searchResults = nil
-            curseforgeSkipped = false
+            // 必须写 self.：同名的局部变量在下面才声明，闭包里裸写会解析到它，
+            // Release（WMO）下直接报 "closure captures before it is declared"。
+            self.curseforgeSkipped = false
         }
         
         var results: [ProjectListItemModel] = []
