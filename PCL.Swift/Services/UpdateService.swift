@@ -64,7 +64,8 @@ class UpdateService {
                 return
             }
             
-            hint("正在从 GitHub 下载更新，完成后 PCL.Swift 会自动重启……")
+            let source: String = version.downloads.urls.first?.host ?? "更新源"
+            hint("正在从 \(source) 下载更新，完成后 PCL.Swift 会自动重启……")
             do {
                 // 更新渠道只有 GitHub 一处，没有镜像可选（旧渠道的 useMirror 参数已删除）。
                 try await UpdateManager.shared.installUpdate(version)

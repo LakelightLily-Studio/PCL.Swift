@@ -542,6 +542,15 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
   发布页还有 dmg，更新器按「前缀 + .zip」筛，资产改名会让更新被静默跳过。
 - 更新包解开后要能找到 `PCL.Swift.app`（兼容旧的 `PCL.Mac.app`），缺失时报「更新包格式错误」。
 - GitHub API 未登录限流 60 次/小时/IP，一次检查只发 1 个请求；不要在启动流程里重复轮询。
+- **国内清单优先**（2.1.0 起）：检查更新先读 functy/pcl-swift-dist 的 update.json，全部入口失败才回退 GitHub
+  Release。入口只有三条（raw.gitcode.com → api.gitcode.com 的 raw → gitee），其余地址都由清单下发，
+  换源不用发版。实现在 Core 的 UpdateManifestClient，DTO 是 UpdateManifest。
+- 清单里 yanked 是撤包（跳过该版本继续找更旧的）、rollout 是灰度百分比、mirrors 是下载备用地址。
+  更新包带 sha256 时 **必须**校验通过，校验逻辑复用 FileUtils.check，不要再写一份。
+- 国内仓库的公开审核期间 raw.gitcode.com 会返回 403「暂不支持预览」，此时走
+  api.gitcode.com/api/v5/repos/<owner>/<repo>/raw/<path>?ref=main；审核通过后把清单里的主地址换回 raw 即可。
+- 发版后的国内分发由 release.yml 的 publish-dist job 完成（Scripts/publish-dist.sh），
+  它只复制产物与清单，**不取代** GitHub Release。token 走 GITCODE_TOKEN secret，不要写进仓库。
 
 ## 提交与 PR
 

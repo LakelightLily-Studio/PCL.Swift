@@ -7,8 +7,8 @@ import Foundation
 
 /// 一次更新检查的结果。
 ///
-/// 早期这里是 Cylorine Studio 的 update.json 的镜像结构；那份元数据不再跟随
-/// 本仓库发版，所以现在由 UpdateManager 直接从 GitHub Release 组装。
+/// 早期这里是 Cylorine Studio 的 update.json 的镜像结构；现在由 UpdateManager
+/// 从国内清单（update.json）组装，失败时回退 GitHub Release。
 struct UpdateInfo {
     struct Link {
         let name: String
@@ -16,11 +16,11 @@ struct UpdateInfo {
     }
 
     struct Downloads {
-        /// 更新包地址（GitHub Release 资产里的 PCL.Swift-zip）。
-        let url: URL
+        /// 更新包地址：主地址在前，备用源（GitHub / 另一平台）在后。
+        let urls: [URL]
         let size: Int
-        /// 旧渠道会带 SHA-1 校验值，GitHub Release 不提供，所以是可选的。
-        let sha1: String?
+        /// 清单下发的 SHA-256；GitHub 渠道没有，所以是可选的。
+        let sha256: String?
     }
 
     /// 展示名，通常是 Release 标题（例如 2.0.1）。

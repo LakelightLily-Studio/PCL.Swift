@@ -93,3 +93,41 @@ jobs:
             --draft
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 把产物与清单推到国内分发仓库（GitCode）。
+  #
+  # 只做「复制到国内」：GitHub Release 仍然是构建与发布的事实来源，
+  # 这一步失败不会影响 GitHub 上的产物，但会让国内用户拿不到新版本，
+  # 所以它跑在 release 之后并且不吞错。
+  publish-dist:
+    needs: release
+    if: ${{ needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        run: |
+          VERSION=$(grep '^MARKETING_VERSION' Configs/Base.xcconfig | cut -d '=' -f2 | xargs)
+          echo "TAG=v$VERSION" >> "$GITHUB_ENV"
+          echo "发布版本：v$VERSION"
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p assets
+          # 只取两个更新包；dmg 与 build.xcarchive.zip 不进分发仓库。
+          gh release download "$TAG" --pattern 'PCL.Swift-*.zip' --dir assets
+          ls -l assets
+
+      - name: Publish manifest and packages
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          TAG: ${{ env.TAG }}
+        run: Scripts/publish-dist.sh
+

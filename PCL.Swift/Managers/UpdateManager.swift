@@ -35,6 +35,40 @@ class UpdateManager {
         // 它们本来就领先于最新发布版，提示只会干扰调试。
         if Metadata.debugMode || Metadata.bundleVersion == 0 { return nil }
 
+        // 先走国内清单：一个请求，不限流；全部入口失败才回退 GitHub。
+        do {
+            return try await checkUpdatesFromManifest()
+        } catch {
+            warn("国内清单不可用：\(error.localizedDescription)，回退 GitHub Release")
+        }
+        return try await checkUpdatesFromGitHub()
+    }
+
+    /// 从国内清单挑出比当前更新的稳定版。
+    ///
+    /// 规则与 GitHub 渠道一致：只认稳定版、按营销版本比较、装不上的版本继续往下找。
+    /// 额外两条：`yanked` 视为撤包，`rollout` 是灰度百分比。
+    private func checkUpdatesFromManifest() async throws -> UpdateInfo? {
+        let manifest: UpdateManifest = try await UpdateManifestClient.shared.fetch()
+        let candidates: [UpdateManifest.Release] = manifest.releases
+            .filter { !$0.prerelease && !$0.yanked && LauncherVersion.components(of: $0.version) != nil }
+            .sorted { LauncherVersion.isNewer($0.version, than: $1.version) }
+
+        for release in candidates where LauncherVersion.isNewer(release.version, than: Metadata.appVersion) {
+            guard let asset: UpdateManifest.Asset = release.asset(for: .systemArchitecture()) else { continue }
+            return .init(
+                name: release.name ?? release.version,
+                version: release.version,
+                summary: release.summary ?? "打开更新日志查看本次更新内容。",
+                updateLogLinks: release.notesURL.map { [.init(name: "查看完整更新日志", url: $0)] } ?? [],
+                downloads: .init(urls: asset.allURLs, size: asset.size ?? 0, sha256: asset.sha256)
+            )
+        }
+        return nil
+    }
+
+    /// GitHub Release 渠道（兜底）。
+    private func checkUpdatesFromGitHub() async throws -> UpdateInfo? {
         let releases: [GitHubRelease] = try await HTTPClient.shared.get(
             releasesURL,
             headers: ["Accept": "application/vnd.github+json"],
@@ -61,10 +95,11 @@ class UpdateManager {
     /// 下载并安装更新，完成后重启。
     public func installUpdate(_ version: UpdateInfo) async throws {
         let destination: URL = URLConstants.tempURL.appending(path: "launcher-update-\(version.version)")
+        // 主地址失败会自动换 mirrors；清单给了 sha256 就必须校验通过。
         let downloadItem: DownloadItem = .init(
-            url: version.downloads.url,
+            urls: version.downloads.urls,
             destination: destination,
-            sha1: version.downloads.sha1
+            checksums: version.downloads.sha256.map { ["sha256": $0] }
         )
         defer { try? FileManager.default.removeItem(at: destination) }
         try await FileDownloader.shared.download(downloadItem)
@@ -115,7 +150,7 @@ private extension GitHubRelease {
             version: versionString,
             summary: summary,
             updateLogLinks: [.init(name: "查看完整更新日志", url: htmlURL)],
-            downloads: .init(url: asset.downloadURL, size: asset.size, sha1: nil)
+            downloads: .init(urls: [asset.downloadURL], size: asset.size, sha256: nil)
         )
     }
 
