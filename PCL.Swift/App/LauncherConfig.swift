@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 import Core
 
 class LauncherConfig: Codable {
@@ -161,15 +162,30 @@ class LauncherConfig: Codable {
     public var customCacheDirectory: URL? {
         didSet { LauncherConfig.markDirty() }
     }
+    /// 是否缓存资源列表（搜索结果 / 已安装模组列表，设置 → 其他 → 缓存）。
+    ///
+    /// 只在内存里，按下面的时间限制过期。关掉之后每次翻页 / 回到同一页都会重新加载。
+    public var enableResourceListCache: Bool = true {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 资源列表缓存的时间限制（分钟）。界面上只给 10 / 30 两档。
+    public var resourceListCacheMinutes: Int = 10 {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 是否缓存资源图标。开启后会落盘到缓存目录，关掉就完全不走缓存。
+    public var enableImageCache: Bool = true {
+        didSet { LauncherConfig.markDirty() }
+    }
 
     // MARK: - 社区资源
 
-    /// 下载资源时使用的文件名模板。
+    /// 下载资源时使用的文件名格式。
     ///
-    /// 支持的占位符：{name}（资源名称）、{version}（版本号）、{loader}（加载器）、
-    /// {type}（资源类型）。格式化逻辑只有一处实现：Core 的 ResourceFileName，
-    /// 改规则请改那里，不要在下载点各自拼字符串。
-    public var resourceFileNameFormat: String = ResourceFileName.defaultTemplate {
+    /// 与 PCL2 的 ToolDownloadTranslateV2 一一对应：五种「译名前缀 / 后缀」样式；
+    /// 没有译名（项目名与原始文件名相同）时直接沿用原始文件名。
+    /// 格式化逻辑只有一处实现：Core 的 ResourceFileName，改规则请改那里，
+    /// 不要在下载点各自拼字符串。
+    public var resourceFileNameFormat: ResourceFileName.Format = .bracketSquare {
         didSet { LauncherConfig.markDirty() }
     }
     /// 已安装资源列表的标题样式（标题显示名称还是文件名）。
@@ -193,6 +209,32 @@ class LauncherConfig: Codable {
     }
     /// 标题栏自定义图片路径，仅在 titleBarLogoType 为 image 时使用。
     public var titleBarImageURL: URL? {
+        didSet { LauncherConfig.markDirty() }
+    }
+
+    // MARK: - 背景图片
+
+    /// 用户指定的背景图片。设置后优先于图片文件夹里的随机图；
+    /// nil 表示「用文件夹里随机一张」。
+    public var backgroundImageURL: URL? {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 背景图片的自适应方式（PCL2 的 UiBackgroundSuit）。
+    public var backgroundImageSuit: BackgroundImageSuit = .automatic {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 背景图片不透明度，取值 0…1000（PCL2 的 UiBackgroundOpacity，界面上除以 10 显示成百分比）。
+    public var backgroundImageOpacity: Int = 1000 {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 背景图片模糊半径（PCL2 的 UiBackgroundBlur），0 表示不模糊。
+    public var backgroundImageBlur: Int = 0 {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 页面底色是否叠加主题彩色背景（PCL2 的 UiBackgroundColorful）。
+    ///
+    /// 关掉时整块页面底色退回中性灰 #f5f5f5——原版就是给低配机器留的开关。
+    public var backgroundColorful: Bool = true {
         didSet { LauncherConfig.markDirty() }
     }
 
@@ -326,13 +368,23 @@ class LauncherConfig: Codable {
         self.separatesVersionListSource = try container.decodeIfPresent(Bool.self, forKey: .separatesVersionListSource) ?? false
         self.versionListSourcePolicy = try container.decodeIfPresent(DownloadSourcePolicy.self, forKey: .versionListSourcePolicy) ?? .officialFirst
         self.customCacheDirectory = try container.decodeIfPresent(URL.self, forKey: .customCacheDirectory)
-        self.resourceFileNameFormat = try container.decodeIfPresent(String.self, forKey: .resourceFileNameFormat) ?? ResourceFileName.defaultTemplate
+        self.enableResourceListCache = try container.decodeIfPresent(Bool.self, forKey: .enableResourceListCache) ?? true
+        self.resourceListCacheMinutes = try container.decodeIfPresent(Int.self, forKey: .resourceListCacheMinutes) ?? 10
+        self.enableImageCache = try container.decodeIfPresent(Bool.self, forKey: .enableImageCache) ?? true
+        // 旧配置里存的是自由模板（如 "{name}-{version}"），解不出枚举就退回原版默认值。
+        self.resourceFileNameFormat = (try? container.decodeIfPresent(ResourceFileName.Format.self, forKey: .resourceFileNameFormat)) ?? .bracketSquare
         self.resourceTitleStyle = (try? container.decodeIfPresent(ResourceTitleStyle.self, forKey: .resourceTitleStyle)) ?? .nameFirst
 
         self.navigationBarBackground = (try? container.decodeIfPresent(NavigationBarBackground.self, forKey: .navigationBarBackground)) ?? .theme
         self.titleBarLogoType = (try? container.decodeIfPresent(TitleBarLogoType.self, forKey: .titleBarLogoType)) ?? .logo
         self.titleBarText = try container.decodeIfPresent(String.self, forKey: .titleBarText) ?? "PCL.Swift"
         self.titleBarImageURL = try container.decodeIfPresent(URL.self, forKey: .titleBarImageURL)
+
+        self.backgroundImageURL = try container.decodeIfPresent(URL.self, forKey: .backgroundImageURL)
+        self.backgroundImageSuit = (try? container.decodeIfPresent(BackgroundImageSuit.self, forKey: .backgroundImageSuit)) ?? .automatic
+        self.backgroundImageOpacity = try container.decodeIfPresent(Int.self, forKey: .backgroundImageOpacity) ?? 1000
+        self.backgroundImageBlur = try container.decodeIfPresent(Int.self, forKey: .backgroundImageBlur) ?? 0
+        self.backgroundColorful = try container.decodeIfPresent(Bool.self, forKey: .backgroundColorful) ?? true
 
         self.gameWindowType = (try? container.decodeIfPresent(GameWindowType.self, forKey: .gameWindowType)) ?? .standard
         self.gameWindowWidth = try container.decodeIfPresent(Int.self, forKey: .gameWindowWidth) ?? 854
@@ -381,6 +433,9 @@ class LauncherConfig: Codable {
         try container.encode(separatesVersionListSource, forKey: .separatesVersionListSource)
         try container.encode(versionListSourcePolicy, forKey: .versionListSourcePolicy)
         try container.encodeIfPresent(customCacheDirectory, forKey: .customCacheDirectory)
+        try container.encode(enableResourceListCache, forKey: .enableResourceListCache)
+        try container.encode(resourceListCacheMinutes, forKey: .resourceListCacheMinutes)
+        try container.encode(enableImageCache, forKey: .enableImageCache)
         try container.encode(resourceFileNameFormat, forKey: .resourceFileNameFormat)
         try container.encode(resourceTitleStyle, forKey: .resourceTitleStyle)
 
@@ -388,6 +443,12 @@ class LauncherConfig: Codable {
         try container.encode(titleBarLogoType, forKey: .titleBarLogoType)
         try container.encode(titleBarText, forKey: .titleBarText)
         try container.encodeIfPresent(titleBarImageURL, forKey: .titleBarImageURL)
+
+        try container.encodeIfPresent(backgroundImageURL, forKey: .backgroundImageURL)
+        try container.encode(backgroundImageSuit, forKey: .backgroundImageSuit)
+        try container.encode(backgroundImageOpacity, forKey: .backgroundImageOpacity)
+        try container.encode(backgroundImageBlur, forKey: .backgroundImageBlur)
+        try container.encode(backgroundColorful, forKey: .backgroundColorful)
 
         try container.encode(gameWindowType, forKey: .gameWindowType)
         try container.encode(gameWindowWidth, forKey: .gameWindowWidth)
@@ -471,12 +532,20 @@ class LauncherConfig: Codable {
         case separatesVersionListSource
         case versionListSourcePolicy
         case customCacheDirectory
+        case enableResourceListCache
+        case resourceListCacheMinutes
+        case enableImageCache
         case resourceFileNameFormat
         case resourceTitleStyle
         case navigationBarBackground
         case titleBarLogoType
         case titleBarText
         case titleBarImageURL
+        case backgroundImageURL
+        case backgroundImageSuit
+        case backgroundImageOpacity
+        case backgroundImageBlur
+        case backgroundColorful
         case gameWindowType
         case gameWindowWidth
         case gameWindowHeight
@@ -568,6 +637,61 @@ public enum TitleBarLogoType: String, Codable, CaseIterable, CustomStringConvert
         case .logo: "默认"
         case .text: "文本"
         case .image: "图片"
+        }
+    }
+}
+
+/// 背景图片的自适应方式。
+///
+/// 名称与顺序照 PCL2 的 PageSetupUI 里那个下拉框（UiBackgroundSuit 的 0…12），
+/// 语义同样是 WPF 的 ImageBrush：Stretch 决定是否保持长宽比，
+/// Alignment 决定图片对齐到哪一边。
+public enum BackgroundImageSuit: String, Codable, CaseIterable, CustomStringConvertible {
+    /// 图片比窗口小就平铺，否则按长宽比铺满（原版默认）。
+    case automatic
+    /// 按原始尺寸平铺。
+    case tile
+    /// 原始尺寸居中，超出部分裁掉。
+    case center
+    /// 拉伸填满整个窗口，会改变长宽比。
+    case stretch
+    case topLeft, centerLeft, bottomLeft
+    case topCenter
+    /// 保持长宽比铺满窗口（默认的「适应」）。
+    case aspectFit
+    case bottomCenter
+    case topRight, centerRight, bottomRight
+
+    public var description: String {
+        switch self {
+        case .automatic: "自动"
+        case .tile: "平铺"
+        case .center: "居中"
+        case .stretch: "拉伸"
+        case .topLeft: "左上 (保持长宽比)"
+        case .centerLeft: "左中 (保持长宽比)"
+        case .bottomLeft: "左下 (保持长宽比)"
+        case .topCenter: "中上 (保持长宽比)"
+        case .aspectFit: "居中 (保持长宽比)"
+        case .bottomCenter: "中下 (保持长宽比)"
+        case .topRight: "右上 (保持长宽比)"
+        case .centerRight: "右中 (保持长宽比)"
+        case .bottomRight: "右下 (保持长宽比)"
+        }
+    }
+
+    /// 对应 WPF 的对齐方式，SwiftUI 侧换算成 Alignment 与填充模式。
+    public var alignment: Alignment {
+        switch self {
+        case .topLeft: .topLeading
+        case .centerLeft: .leading
+        case .bottomLeft: .bottomLeading
+        case .topCenter: .top
+        case .bottomCenter: .bottom
+        case .topRight: .topTrailing
+        case .centerRight: .trailing
+        case .bottomRight: .bottomTrailing
+        case .automatic, .tile, .center, .stretch, .aspectFit: .center
         }
     }
 }

@@ -23,10 +23,12 @@ struct ResourceInstallPage: View {
             MyCard(nil) {
                 ProjectListItemView(project: viewModel.project, primary: true)
                 HStack {
-                    MyButton("Modrinth", type: .highlight) {
-                        NSWorkspace.shared.open(URL(string: "https://modrinth.com/project/\(viewModel.project.id)")!)
+                    if let url: URL = viewModel.project.projectURL {
+                        MyButton(viewModel.project.source.siteName, type: .highlight) {
+                            NSWorkspace.shared.open(url)
+                        }
+                        .frame(width: 120)
                     }
-                    .frame(width: 120)
                     Spacer(minLength: 0)
                 }
                 .frame(height: 35)

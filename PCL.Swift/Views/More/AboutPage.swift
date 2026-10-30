@@ -28,7 +28,10 @@ struct AboutPage: View {
                                 .init("问题反馈", "https://github.com/LakelightLily-Studio/PCL.Swift/issues"))
                 }
             }
-            .cardIndex(1)
+            // 卡片序号必须从 0 连续排下去：入场动画的延迟是 25ms × index（封顶 8 步）。
+            // 早先「关于」是 1、「特别鸣谢」是 2，而最后一张卡没写 index（默认 0），
+            // 于是「许可与版权声明」抢在「特别鸣谢」前面出现，看起来就是后者慢了一步。
+            .cardIndex(0)
             
             StaticCard("特别鸣谢") {
                 VStack(spacing: 0) {
@@ -45,7 +48,7 @@ struct AboutPage: View {
                                 .init("GitHub 仓库", "https://github.com/suhang12332/Swift-Craft-Launcher"))
                 }
             }
-            .cardIndex(2)
+            .cardIndex(1)
             
             StaticCard("许可与版权声明") {
                 VStack(spacing: 15) {
@@ -78,6 +81,7 @@ struct AboutPage: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
             }
+            .cardIndex(2)
         }
     }
     

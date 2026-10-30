@@ -21,5 +21,6 @@ struct MultiplayerSidebar: Sidebar {
             )
             Spacer()
         }
+        .padding(.top, 12)
     }
 }

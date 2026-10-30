@@ -16,6 +16,7 @@ import SwiftUI
 struct StaticCard<Content: View>: View {
     @Environment(\.cardIndex) private var index: Int
     @Environment(\.disableCardAppearAnimation) private var disableCardAppearAnimation: Bool
+    @Environment(\.pageExiting) private var pageExiting: Bool
 
     @State private var appeared: Bool = false
 
@@ -57,6 +58,16 @@ struct StaticCard<Content: View>: View {
         .animation(
             disableCardAppearAnimation ? nil : PageEntrance.animation(for: index),
             value: appeared
+        )
+        // 退场与 MyCard 完全一致：70ms 线性淡出 + 上移 6pt，按卡片序号错峰 15ms。
+        .modifier(ControlExitShape(
+            progress: pageExiting ? 1 : 0,
+            offset: CGSize(width: 0, height: PageExit.offset),
+            enabled: !disableCardAppearAnimation
+        ))
+        .animation(
+            disableCardAppearAnimation ? nil : PageExit.animation(for: index),
+            value: pageExiting
         )
         .onAppear {
             appeared = true

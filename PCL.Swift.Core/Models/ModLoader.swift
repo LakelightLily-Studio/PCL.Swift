@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum ModLoader: String, Codable, CustomStringConvertible {
+public enum ModLoader: String, Codable, CaseIterable, CustomStringConvertible {
     case fabric, forge, neoforge
     
     public var index: Int {

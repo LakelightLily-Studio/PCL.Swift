@@ -63,8 +63,11 @@ struct MyListItem<Content: View>: View {
             .padding(4)
             .contentShape(Rectangle())
             .background {
+                // 非悬停态用同一个颜色把不透明度降到 0，不要写 .clear：
+                // Color.clear 是透明黑，淡出时 RGB 会往黑走，看起来是
+                // 「蓝色褪掉 → 灰一下 → 才变回白色」。
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(hovered ? Color.color2.opacity(0.1) : .clear)
+                    .fill(Color.color2.opacity(hovered ? 0.1 : 0))
                     .scaleEffect(backgroundScale)
                     .allowsHitTesting(false)
             }

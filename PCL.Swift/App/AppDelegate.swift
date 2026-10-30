@@ -111,6 +111,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if shouldInit {
             _ = LauncherConfig.shared
             _ = JavaManager.shared
+            // 背景图片：每次启动随机换一张，与 PCL2 的 BackgroundRefresh 一致。
+            Task { @MainActor in
+                BackgroundImageManager.shared.refresh(random: true)
+            }
             executeTask("加载字体") {
                 let fontURL: URL = URLConstants.resourcesURL.appending(path: "PCL.ttf")
                 var error: Unmanaged<CFError>?

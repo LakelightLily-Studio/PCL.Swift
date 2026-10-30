@@ -21,6 +21,8 @@ public class ModrinthAPIClient {
     ///   - type: 项目类型（`ResourceType`）。
     ///   - query: 搜索关键词。
     ///   - gameVersion: 过滤游戏版本。
+    ///   - loader: 过滤 Mod 加载器（Modrinth 把它算进 categories 标签里）。
+    ///   - category: 过滤类别标签（如 optimization / technology）。
     ///   - pageIndex: 页码，从 0 开始。
     ///   - limit: 返回结果数量上限。
     /// - Returns: 包含搜索结果和分页信息的 `SearchResponse`。
@@ -28,12 +30,21 @@ public class ModrinthAPIClient {
         type: ResourceType,
         _ query: String?,
         forVersion gameVersion: String?,
+        loader: ModLoader? = nil,
+        category: String? = nil,
         pageIndex: Int = 0,
         limit: Int = 40
     ) async throws -> SearchResponse {
+        // Modrinth 的 facets 是「外层 AND、内层 OR」：每个条件单独占一个内层数组。
         var facets: [[String]] = [["project_type:\(type)"]]
         if let gameVersion {
             facets.append(["versions:\(gameVersion)"])
+        }
+        if let loader {
+            facets.append(["categories:\(loader.rawValue)"])
+        }
+        if let category {
+            facets.append(["categories:\(category)"])
         }
         let facetsString: String = String(data: try JSONSerialization.data(withJSONObject: facets), encoding: .utf8)!
         
@@ -49,6 +60,11 @@ public class ModrinthAPIClient {
         return try response.decode(SearchResponse.self)
     }
     
+    /// 获取全部类别标签（按 project_type 区分，界面上用它填「类型」下拉框）。
+    public func categories() async throws -> [Category] {
+        try await HTTPClient.shared.get(apiRoot.appending(path: "/v2/tag/category")).decode([Category].self)
+    }
+
     /// 获取指定 id 或 slug 对应的 `ModrinthProject`。
     /// - Parameters:
     ///   - slug: 指定 id 或 slug。
@@ -125,6 +141,26 @@ public class ModrinthAPIClient {
     }
     
     // MARK: - 数据模型
+
+    /// 一个类别标签（`/v2/tag/category`）。
+    ///
+    /// `header` 是标签的分组（categories / resolutions / features…）。
+    /// 加载器（forge / fabric…）**不在**这张表里，它们是搜索时单独的 categories facet，
+    /// 由「Mod 加载器」那一栏负责。
+    public struct Category: Decodable, Hashable, Identifiable {
+        private enum CodingKeys: String, CodingKey {
+            case name, projectType = "project_type", header, icon
+        }
+
+        public let name: String
+        /// 用 String 而不是 ResourceType：接口还会返回 minecraft_java_server
+        /// 这类本启动器没有的类型，硬解成枚举会让**整份列表**解码失败。
+        public let projectType: String
+        public let header: String
+        public let icon: String
+
+        public var id: String { name }
+    }
     
     public struct SearchResponse: Decodable {
         private enum CodingKeys: String, CodingKey {

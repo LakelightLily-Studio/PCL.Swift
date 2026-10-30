@@ -20,7 +20,16 @@ class HintManager: ObservableObject {
         let hint: HintModel = .init(text: text, type: type)
         hints.append(hint)
         DispatchQueue.main.asyncAfter(deadline: .now() + time) {
-            self.hints.removeAll(where: { $0.id == hint.id })
+            self.dismiss(hint.id)
+        }
+    }
+    
+    /// 播完退场动画再移除（PCL2 的 MyHint.AniDispose：缩放 + 淡出 + 高度收 0）。
+    private func dismiss(_ id: UUID) {
+        guard let index = hints.firstIndex(where: { $0.id == id }), !hints[index].isDismissing else { return }
+        hints[index].isDismissing = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + HintExit.window) {
+            self.hints.removeAll(where: { $0.id == id })
         }
     }
     

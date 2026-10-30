@@ -116,11 +116,20 @@ class AppRouter: ObservableObject {
         append(route)
     }
 
+    /// 返回上一级。
+    ///
+    /// 版本设置是「壳」层：从它的子页面返回时连它一起弹掉，直接回启动页。
+    /// 这里先把最终路径算好再一次性赋值——早先是递归地改两次 `path`，
+    /// 会发布两次变更，中间那一帧停在 `.instanceSettings` 上，标题栏因此
+    /// 可能闪一下不该出现的中间态。
     func removeLast() {
-        if path.count > 1 {
-            path.removeLast()
-            if case .instanceSettings = last { removeLast() }
+        guard path.count > 1 else { return }
+        var newPath: [AppRoute] = path
+        newPath.removeLast()
+        if let next = newPath.last, case .instanceSettings = next {
+            newPath.removeLast()
         }
+        path = newPath
     }
     
     /// 该路由在当前功能开关下是否可用。
@@ -157,11 +166,26 @@ class AppRouter: ObservableObject {
 /// 连同 @StateObject 与 Combine 订阅一起销毁重建——这是切页 78ms 的主要来源。
 struct AppRouterView: View {
     @ObservedObject private var router: AppRouter = .shared
+    @ObservedObject private var transition: PageTransition = .shared
     @EnvironmentObject private var instanceManager: InstanceManager
 
-    @ViewBuilder
     var body: some View {
-        switch router.last {
+        // 页面只认 PageTransition 的 presentation：退场期间挂着的仍是旧页面，
+        // 退场跑完才换成新页面（PCL2 的 FormMain.PageChangeAnim 就是这个时序）。
+        page(for: transition.presentation.route)
+            // 退场期间整块内容不接收点击：PCL2 的 TriggerExitAnimation 会把
+            // 每个控件 IsHitTestVisible 置 false，效果一致。
+            .allowsHitTesting(!transition.presentation.isExiting)
+            .environment(\.pageExiting, transition.presentation.isExiting)
+            .onAppear { transition.sync() }
+            .onChange(of: router.last) { newValue in
+                transition.request(newValue)
+            }
+    }
+
+    @ViewBuilder
+    private func page(for route: AppRoute) -> some View {
+        switch route {
         case .launch:
             LaunchPage()
         case .minecraftDownload:
@@ -231,17 +255,41 @@ struct AppRouterView: View {
 /// 成本从销毁挪到了每次布局。
 struct AppSidebarView: View {
     @EnvironmentObject private var instanceManager: InstanceManager
-    @ObservedObject private var router: AppRouter = .shared
+    @ObservedObject private var transition: PageTransition = .shared
     @ObservedObject private var themeManager: ThemeManager = .shared
+    @ObservedObject private var backgroundImageManager: BackgroundImageManager = .shared
     @State private var width: CGFloat = 0
     /// 启动页 / 任务页侧边栏的"淡入 + 轻微放大"入场进度。
     @State private var animationProgress: Double = 0
 
     init() {}
 
+    /// 当前挂着的页面。与 AppRouterView 共用同一条时间线：退场期间侧边栏也还是旧的。
+    private var presentedRoute: AppRoute { transition.presentation.route }
+    /// 侧边栏是否要播退场。
+    ///
+    /// 侧边栏条目发起的切换**不播**：那只是换个选中态，整列淡出再淡回来是多余的，
+    /// 而且退场比换页窗口长，会被截断成"播一半突然复原"。
+    /// 顶栏切页、返回按钮这些仍然照播。
+    private var isExiting: Bool { transition.presentation.isExiting && !transition.isSidebarNavigation }
+
+    /// 整块缩放退场的侧边栏。
+    ///
+    /// PCL2 的 MyPageLeft 按 XAML 里有没有 AnimatedControl 分两套退场：
+    /// 启动页与任务页没有，走 110ms 缩到 0.95 + 80ms 淡出；其余侧边栏
+    /// （下载 / 设置 / 更多 / 版本选择 / 版本设置）逐条目退场，见 MyNavigationList。
+    private var usesScaleExit: Bool {
+        switch presentedRoute {
+        case .launch, .tasks: true
+        default: false
+        }
+    }
+
     /// 侧边栏宽度。各侧边栏把宽度暴露为静态常量，避免为了取宽度去构造实例。
-    private var sidebarWidth: CGFloat {
-        switch router.last {
+    private var sidebarWidth: CGFloat { width(for: presentedRoute) }
+
+    private func width(for route: AppRoute) -> CGFloat {
+        switch route {
         case .launch: LaunchSidebar.widthConstant
         case .instanceList, .dshInstanceList: InstanceListSidebar.widthConstant
         case .instanceSettings, .instanceConfig, .installedResources,
@@ -258,15 +306,26 @@ struct AppSidebarView: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
+            // 有背景图片时底板换成 94% 白（PCL2 的 ColorBrushBackgroundTransparentSidebar），
+            // 让图片能透出来；没有图片时仍是纯白。
             Rectangle()
-                .fill(.white)
+                .fill(Color.white.opacity(backgroundImageManager.image == nil ? 1 : 0xF1 / 255))
                 .frame(width: width)
                 .shadow(radius: 2)
                 .zIndex(10)
 
-            sidebarContent
+            sidebarContent(for: presentedRoute)
                 .opacity(animationProgress)
                 .scaleEffect(animationProgress * 0.04 + 0.96)
+                // 整块退场：110ms 缩到 0.95（t²）+ 80ms 淡出（延迟 30ms），
+                // 与 PCL2 的 MyPageLeft.TriggerHideAnimation 的缩放分支一致。
+                .modifier(SidebarScaleExitShape(progress: isExiting ? 1 : 0, enabled: usesScaleExit))
+                .animation(
+                    usesScaleExit && isExiting ? .linear(duration: SidebarExit.scaleDuration) : nil,
+                    value: isExiting
+                )
+                // 逐条目退场由 MyNavigationList 里的每个条目自己播。
+                .environment(\.pageExiting, isExiting)
                 .zIndex(11)
                 .frame(width: sidebarWidth)
         }
@@ -275,7 +334,7 @@ struct AppSidebarView: View {
         .frame(width: sidebarWidth, alignment: .leading)
         .onAppear {
             width = sidebarWidth
-            if router.root == .launch || router.root == .tasks {
+            if presentedRoute == .launch || presentedRoute == .tasks {
                 playLegacyEntrance()
             } else {
                 animationProgress = 1
@@ -287,7 +346,7 @@ struct AppSidebarView: View {
             }
             // 只有启动页 / 任务页的侧边栏用这套淡入 + 放大；
             // 其它页面的入场在 MyNavigationList 里逐条目播放，两套不能同时挂。
-            if router.root == .launch || router.root == .tasks {
+            if presentedRoute == .launch || presentedRoute == .tasks {
                 playLegacyEntrance()
             }
         }
@@ -309,8 +368,8 @@ struct AppSidebarView: View {
     }
 
     @ViewBuilder
-    private var sidebarContent: some View {
-        switch router.last {
+    private func sidebarContent(for route: AppRoute) -> some View {
+        switch route {
         case .launch:
             LaunchSidebar(instanceManager: instanceManager)
         case .instanceList, .dshInstanceList:

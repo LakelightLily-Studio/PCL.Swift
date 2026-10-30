@@ -19,6 +19,12 @@ private struct DisableHoverAnimationKey: EnvironmentKey {
     public static let defaultValue: Bool = false
 }
 
+/// 页面是否正在退场。由 AppRouterView / AppSidebarView 按 PageTransition 的状态注入，
+/// 卡片与侧边栏条目据此播放退场动画（见 ControlExit.swift）。
+private struct PageExitingKey: EnvironmentKey {
+    public static let defaultValue: Bool = false
+}
+
 extension EnvironmentValues {
     var cardIndex: Int {
         get { self[CardIndexKey.self] }
@@ -33,6 +39,11 @@ extension EnvironmentValues {
     var disableHoverAnimation: Bool {
         get { self[DisableHoverAnimationKey.self] }
         set { self[DisableHoverAnimationKey.self] = newValue }
+    }
+    
+    var pageExiting: Bool {
+        get { self[PageExitingKey.self] }
+        set { self[PageExitingKey.self] = newValue }
     }
 }
 

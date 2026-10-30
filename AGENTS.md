@@ -287,11 +287,37 @@ Theme 只给「基色」，其余 7 档由 ThemePaletteBuilder 按固定比例�
 新增主题只需加一个 case 和 baseHex，不要手写十几档色值（一定会漂移）。
 
 - Color.colorN 全部读 ThemeManager.shared.palette，不直接读枚举。
-- 设置页用下拉列表切主题（MySelect + Theme.allCases）；只有向导还在画候选色卡，
-  画色卡时必须用 ThemeManager.palette(for:)，不能读"当前主题"。
+- 设置页用五列圆形单选框切主题（MyRadioBox + Theme.allCases，与原版一致）；
+  只有向导还在画候选色卡，画色卡时必须用 ThemeManager.palette(for:)，不能读"当前主题"。
 - 自定义主题存 HSB 三值（themeHue / themeSaturation / themeBrightness），
   视图树的重建标识是 ThemeManager.revision（含三值），
   只拿主题名当 id 的话拖滑杆不会刷新。
+
+## 背景图片
+
+对齐 PCL2 的 FormMain.ImgBack + PageSetupUI 的「背景图片」卡片：
+
+- 图片来源有两种，优先级从高到低：
+  1. 用户在设置里**指定的单张图片**（`LauncherConfig.backgroundImageURL`，设置页的「选择图片」）；
+  2. 数据目录 `Pictures/` 里随机一张（`URLConstants.picturesDirectoryURL`，对应原版 `PCL/Pictures/`）。
+  `BackgroundImageManager.refresh` 先看指定图、再退回文件夹；指定图打不开时会自动解绑并退回随机图，
+  不会让背景静默消失。设置页只有两个按钮：**选择图片**（指定一张）与**清除**
+  （解绑 + 删除图片文件夹里的图 + 撤下背景，带确认框）。原来那个「刷新背景图片」（重新随机）
+  已经删掉——背景既然由用户指定，「再随机换一张」没有意义。
+  启动时由 `AppDelegate.applicationWillFinishLaunching` 触发一次 `refresh(random: true)`。
+- 渲染在 `Components/BackgroundImageView.swift`，挂在 `ContentView` 里标题栏以下那层
+  `HStack` 的 `.background`：卡片与侧边栏画在它上面。四个参数都存在 LauncherConfig
+  （`backgroundImageSuit` / `backgroundImageOpacity` / `backgroundImageBlur` / `backgroundColorful`），
+  rawValue 与顺序照搬原版的 UiBackgroundSuit / UiBackgroundOpacity / UiBackgroundBlur / UiBackgroundColorful。
+- 模糊要**把整层按半径放大**（`scaleEffect`，倍率 = 1 + 4·半径 / 短边，封顶 1.5）：
+  模糊的衰减范围约 2 倍半径，不放大就会在四边透出底下的页面底色，
+  看起来像「四周掺了一圈糊掉的原背景」。
+  **不要用负内边距做这件事**：`padding(-x)` 会让内容在自己的小盒子里居中、原点跑到 (-x, -x)，
+  模糊一开整张图就明显往左上偏——这正是上一版的 bug。
+- 有背景图片时侧边栏底板换成 94% 白（原版 `ColorBrushBackgroundTransparentSidebar`），
+  否则图片会被纯白底板整块挡住。**不要改成完全透明**：卡片与文字会压不住花哨的图片。
+- 「叠加彩色背景」关掉时页面底色退回 `colorGray8`（原版 `#f5f5f5`），在 `ContentView` 的
+  `.background` 里按 `LauncherConfig.shared.backgroundColorful` 二选一。
 
 ## 页面入场动画
 
@@ -311,6 +337,40 @@ Theme 只给「基色」，其余 7 档由 ThemePaletteBuilder 按固定比例�
 - `disableCardAppearAnimation` 仍然有效：自定义主题拖滑杆会重建整棵树，
   那种情况下不该重播入场动画。
 
+## 页面退场动画
+
+PCL2 切页不是"新页面直接盖上来"：旧页面先播退场，110ms 后才换容器，140ms 新页面入场
+（`FormMain.PageChangeAnim`）。SwiftUI 里视图移出视图树是瞬时的，所以这是一层**调度**问题，
+不是修饰器问题：`App/PageTransition.swift` 多存一份 `presentation`（页面 + 是否正在退场），
+路由变了只触发 `request()`，退场跑完才一次性换页面。页面与侧边栏都只认 `presentation.route`，
+`AppRouter.path` 与标题栏仍即时更新（原版也是先改状态再播动画）。
+
+- **页面内容**（`Components/ControlExit.swift` 的 `PageExit`）：每张卡片 70ms 线性淡出 + 上移 6pt，
+  按 `.cardIndex` 错峰 15ms（封顶 4 步，整段 130ms）。PCL2 的 `TriggerExitAnimation` 里这两条 Aa
+  都没给 Ease，**退场是线性的**——不要换成入场那套 AniEaseOutBack。
+- **侧边栏**：分两套（PCL2 的 MyPageLeft 按 XAML 里有没有 AnimatedControl 分叉）。
+  启动页 / 任务页整块 110ms 缩到 0.95（t²）+ 80ms 淡出（延迟 30ms）；
+  其余侧边栏由 `MyNavigationList` 逐条目 50ms 淡出 + 左移 6pt，整列共用 70ms 错峰窗口。
+- **标题栏**：主栏与子栏是两层叠在一起的视图（PCL2 的 PanTitleMain / PanTitleInner）。
+  主→子：主栏 150ms 淡出并右移 12pt，子栏延迟 200ms 进场（150ms 淡入 + 350ms 从 -16 滑到 0）；
+  子→主：子栏左移 18pt 退场，主栏同样延迟 200ms 回来。
+- **左下角提示条**：200ms 左移 50pt + 150ms 线性淡出 + 100ms 高度收 0，跑完才从数组里删
+  （PCL2 的 ModMain「Hint Hide」）。`HintModel.isDismissing` 就是为这段退场留的状态，
+  `HintOverlay` 的容器动画只认 `hints.map(\.id)`，别让它把每条提示自己的曲线盖掉。
+- **消息框**：80ms 淡出（延迟 20ms）+ 150ms 下移 20pt + 150ms 转到 6°。
+- **右下角圆形按钮**：出现 500ms 的 AniEaseOutBack（延迟 60ms），消失 100ms 的 t² 缩放。
+- **新增下载任务**：右下角任务按钮荡开一圈水波（PCL2 的 `MyExtraButton.Ribble`）——半透明圆
+  1000ms 内放大到 13 倍并淡到 0，**不裁剪**（原版就是让它铺到窗口上）。
+  只有任务**变多**时才播；任务完成被移除时不播。
+- **任务卡片**：任务结束时淡出 + 缩到 0.92 后移除（PCL2 的 `MyCard.AniDispose`），
+  靠 `TasksPage` 里 `ForEach` 上的 `.transition` + 只认 `tasks.map(\.id)` 的隐式动画驱动；
+  插入不做过渡（卡片自己的入场动画已经管了那一段）。
+
+`PageTransition` 的几条边界：退场途中又切页 → 沿用同一条退场、只换目标；切回原页面 → 撤销退场；
+换页面与"退场结束"必须在同一帧提交（`Presentation` 是一个结构体），否则新页面会先带着
+`isExiting = true` 挂上去闪一下。`PageAnimationDebug.factor` 对退场同样生效，
+`PCL_ANIM_SLOW=6` 可以录慢动作对时序。
+
 
 ## 卡片折叠与悬停动画
 
@@ -324,6 +384,10 @@ Theme 只给「基色」，其余 7 档由 ThemePaletteBuilder 按固定比例�
 - **卡片悬停**：阴影过渡 90ms，静止不透明度 0.07、悬停 0.4，半径 3，标题颜色同时变。
 - **顶栏页签**（PCL2 的 MyRadioButton）：悬停进入 100ms、离开 200ms。
 - **侧边栏条目**（PCL2 的 MyListItem）：悬停进入 120ms、离开 180ms。
+- **单选与复选是两种控件，不要混用**：单选组（主题、标题栏类型、主页类型、内存分配方式）
+  用 `Components/MyRadioBox.swift`（PCL2 的 MyRadioBox，圆形外圈 + 内点），
+  可多选的开关（自动设置中文、功能开关、导出选项、叠加彩色背景）用 `MyComboBox`（方形复选框）。
+  两者都只认 `Binding<Bool>`，单选组的互斥由调用方的 Binding 完成。
 - 可折叠卡片的初始折叠状态在 `init` 里就位，**不要挪回 onAppear**：晚一帧会让卡片先按
   展开布局画一次，进页面时看得到"内容弹开又收回"。
 - 卡片底色是 PCL2 的 `Color.FromArgb(245,255,255,255)`（近白），不是 `colorGray8`；
@@ -339,12 +403,34 @@ Theme 只给「基色」，其余 7 档由 ThemePaletteBuilder 按固定比例�
   - 启动页 / 任务页：整块侧边栏"淡入 + 放大 0.96 → 1"（原来的那一套，
     启动页账户面板自己还有一层 `insertTransition`）。
   - 其它页面：`MyNavigationList` 逐条目播放 `SidebarEntrance`
-    （PCL2 `MyPageLeft` 的 25px 左移 + 两段 X 补位）。整列表共享一个 `appeared` 开关，
-    每行按 `35ms × 序号`（封顶 8 条）挂 delay。PCL2 的 30…14ms 是对"每个控件"计数的，
-    我们一条目只算一格，所以步长放大到 35ms 才看得出是逐条。
-- 切**子页面**（同一套侧边栏内部导航）不重播入场：`appeared` 是 `MyNavigationList` 的
-  `@State`，只有侧边栏重建才会重新从 false 开始；启动页/任务页的容器动画也只跟着
-  `sidebarWidth` 变化走。
+    （PCL2 `MyPageLeft` 的 25px 左移 + 两段 X 补位）。每行自己持有一个 `appeared`。
+    错峰**照抄原版的累加式** `Delay += Math.Max(15 - Id, 7) * 2`（`SidebarEntrance.delay(for:)`）：
+    0 / 30 / 58 / 84 / 108 / 130 / 150 / 168 / 184 / 198 ms…
+    PCL2 的 `GetAllAnimControls` 把 MyListItem 整个算作一格（图标与文字不单独计数），
+    所以序号直接对应，**不要**再乘一个放大系数。
+- **点侧边栏条目切子页面时，侧边栏既不重播入场、也不播退场**（用户明确要求）：
+  - 入场：行内 `appeared` 只在侧边栏被重建时从 false 开始，同一套侧边栏内部切换保持为 1。
+    所以 `MyNavigationList` **不要**再按切页次数给行换 `.id`——那等于每次点击都重播一遍。
+    换页面族（启动 → 版本选择、下载 → 资源详情…）时 `AppSidebarView` 会换成另一个
+    侧边栏类型，新实例自然播一次入场。
+  - 退场：点条目时 `PageTransition.noteSidebarNavigation()` 会置位 `isSidebarNavigation`，
+    `AppSidebarView` 据此把 `isExiting` 算成 false。**必须这么写**：侧边栏的逐条目退场
+    （50ms + 70ms 错峰）比换页窗口（130ms）短，播完之后 `pageExiting` 立刻回到 false，
+    动画是 `nil`，条目会"啪"地弹回全不透明——看起来就是"动画播到一半被掐掉"。
+    页面内容（卡片）的退场照旧。
+  - 启动页 / 任务页的容器动画仍只跟着 `sidebarWidth` 变化走。
+- **条目点击必须由条目自己的手势处理**：条目里挂着 `DragGesture(minimumDistance: 0)`
+  （按下缩到 0.98），它会在按下瞬间认领事件，外层 `onTapGesture` 永远收不到——
+  表现就是"点侧边栏没反应"。切换页面的动作和缩放放在同一个手势的 `onEnded` 里，
+  条目内的刷新按钮用 `highPriorityGesture` 抢回点击。
+- **条目几何对齐 PCL2 的 MyListItem**（Type=RadioBox、Height=36、IsScaleAnimationEnabled=False）：
+  行高 36；左侧 6pt 的勾选条列里放 5pt 宽、圆角 2、上下各留 6pt 的主色条（未选中收成 0 高）；
+  图标列 34pt（左 6 + 图标 20 + 右 8）；文字左边距 4、字号 14。
+  悬停底色是 `ColorBrushBg1`（`color7` 的 74.5%），进入 120ms、离开 180ms；
+  按下时整条缩到 0.98。**悬停底色不要换回 `color2.opacity(0.1)`**——那是自造色，
+  在深色背景图片上会糊成一片。
+- 纯列表页（设置 / 更多 / 联机 / 版本设置）的列表顶部留 12pt，对应原版
+  `StackPanel Margin="0,12,0,0"`；带分节标题的下载页与版本选择页不加。
 
 ## 设置导入导出
 
@@ -397,12 +483,50 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
 - **主页默认是空白**：原来的「启动器主页」（账号皮肤 / 更新公告 / Minecraft 新闻整页）已删除。
   HomepageType 只剩 empty / preset / local / remote / demo，默认 `.empty`；旧配置里的 dashboard
   解码失败后自动落到 `.empty`，不需要额外迁移代码。想要回那块主页就得重写视图并加回 case。
-- **文件名格式**：模板渲染只有 Core 的 ResourceFileName 一处实现（设置 → 其他 → 社区资源），
+- **文件名格式**：只有 Core 的 ResourceFileName 一处实现（设置 → 其他 → 社区资源），
   下载落点（ResourceInstallViewModel）只调用它，不要各自拼字符串。
-  占位符是 {name} / {version} / {loader} / {type}；没有译名数据源，{name} 就是资源原名，
-  渲染不出内容时回退原始文件名。
+  取值与 PCL2 的 `ToolDownloadTranslateV2` 一一对应：`【译名】文件名` / `[译名] 文件名`（默认）/
+  `译名-文件名` / `文件名-译名` / `只用文件名`。「译名」来自 `ResourceTranslation`（见下一条），
+  查不到时退回项目标题；标题等于文件名主干时视为没有译名，直接沿用源站的原始文件名——
+  与原版同一套判断。
+  **不要再做成自由文本模板**：那会与设置界面对不上，且用户填错一个占位符就得到怪名字。
 - **Mod 管理样式**：ResourceTitleStyle 决定实例资源列表的标题显示名称还是文件名，
   另一项降级成标题右侧的灰字（InstalledResourcesPage.ResourceListItem）。
+- **译名**：实现在 `Services/ResourceTranslation.swift`，内置表 `Resources/Translations.json`，
+  用户可在数据目录放同名的 `Translations.json` 覆盖/追加（改译名不用等发版）。
+  查表 key 是归一化后的 slug / 标题（小写、空格换连字符），查不到就返回 nil——
+  **不要接机翻**：翻错比不翻更难认。译名同时用于列表主标题（原名缩成灰字跟在后面）
+  和落盘文件名（`ProjectListItemModel.fileNameTitle` 喂给 ResourceFileName）。
+- **社区资源筛选**：搜索页（Mod / 整合包 / 资源包 / 光影 / 数据包共用 `ResourcesSearchPage`）的条件对齐
+  PCL2 的 PageResource：**左半边是名称 / 版本 / Mod 加载器（只有 Mod 页显示），右半边是来源 / 类型**，
+  底下是「搜索 / 重置条件」两个按钮。改完条件**点「搜索」才生效**，翻页沿用同一套条件——
+  与原版一致，不要做成改一下就自动搜。
+  - 来源 = 全部 / Modrinth / CurseForge。「全部」会并发查两边再拼起来，页数取两者较大值；
+    没有内置 CurseForge API Key 时下拉里干脆不列 CurseForge，「全部」也只走 Modrinth。
+  - 类型下拉显示中文（`ProjectListItemModel.localizeTag`，查 `category.modrinth.<slug>`），
+    提交给接口的仍是 slug；CurseForge 那边按 slug 对一次 categoryId，对不上就不过滤。
+  - 「Mod 加载器」单独占一行、铺满整张卡：它只在 Mod 页出现，塞进左半边会留一条空荡荡的右半边。
+  - 版本列表取 `VersionManifest` 里最近的 12 个正式版（原版也是一份固定列表，不是全量）。
+  - 类型列表来自 Modrinth 的 `/v2/tag/category`，按 `project_type` 过滤。**模型里 `projectType` 必须是
+    String**：接口还会返回 `minecraft_java_server` 这类本启动器没有的类型，硬解成 `ResourceType`
+    会让整份列表解码失败（表现是类型下拉框永远只有「全部」）。
+  - Modrinth 的加载器与类型都走 facets 里的 `categories:`（它把加载器也算作 category facet）；
+    CurseForge 那边分别是 `modLoaderType` 与 `categoryId`，classId 见 `CurseForgeMod.classId(for:)`。
+  - CurseForge 的文件列表**带依赖但按 modId 逐个查**，所以只给「当前实例能装」的版本查依赖，
+    且一次最多 8 个（`dependencyBudget`），否则打开页面就是几十个请求。
+  - **刷新**：侧边栏条目悬停时出现刷新按钮（原版 PageDownloadLeft 的 6 个条目各有一个），
+    侧边栏与页面不在同一棵视图树里，所以走 `Managers/ResourceRefreshCenter.swift` 的按类型令牌：
+    侧边栏点刷新 → 计数 +1 → 对应页面 `onChange` 收到后用**当前界面上的条件**重搜并回到第一页，
+    并且 `forceRefresh: true` 跳过缓存。
+  - **缓存**（设置 → 其他 → 缓存）：实现在 `Managers/ResourceCacheCenter.swift`，两类规则不同：
+    - **资源列表**（搜索结果 + 已安装模组列表）：只在内存里，按 `resourceListCacheMinutes`
+      过期（界面只给 10 / 30 分钟）。搜索结果按「类型|来源|关键词|版本|加载器|类型标签|页码」做 key；
+      已安装列表按「实例|类型|目录签名」做 key，目录签名 = 路径 + mtime + 文件数，
+      **装/删/改文件会立刻失效**，不然刚装完 Mod 要等十分钟才看得到。
+    - **图标**：开启即**落盘**到 `Caches/images/<key.sha1>`，内存里再留一层避免每帧读盘；
+      关掉会同时清内存与磁盘（关了就没缓存）。key 是「URL + 裁剪区域」，同一张头像的
+      原图与裁剪图不能共用一份。
+    搜索结果**不要落盘**：换源或换筛选后，磁盘缓存很容易给出过期数据。
 
 ## 启动器更新渠道
 

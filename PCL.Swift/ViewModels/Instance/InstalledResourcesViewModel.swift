@@ -84,8 +84,20 @@ class InstalledResourcesViewModel: ObservableObject {
             return
         }
 
-        let result: [(URL, Resource)] = try await loadAllResources()
+        // 列表缓存：扫描 + 逐个算 SHA-1 是这一页最慢的部分，装了几百个 Mod 时尤其明显。
+        // key 里带目录签名（mtime + 文件数），装/删/改文件会立刻失效，
+        // 不会出现「刚装完 Mod 却要等缓存过期才看到」。
+        let cacheKey: String = listCacheKey()
+        var loaded: [(URL, Resource)]? = ResourceCacheCenter.shared.installedList(for: cacheKey)
+        let hitCache: Bool = loaded != nil
+        if loaded == nil {
+            loaded = try await loadAllResources()
+        }
+        let result: [(URL, Resource)] = (loaded ?? [])
             .sorted { $0.1.name.compare($1.1.name, options: .literal) == .orderedAscending }
+        if !hitCache {
+            ResourceCacheCenter.shared.storeInstalled(result, for: cacheKey)
+        }
 
         self.loadResult = result
         if resetPage {
@@ -112,6 +124,32 @@ class InstalledResourcesViewModel: ObservableObject {
         guard let directory = directory() else { throw SimpleError("实例不存在。") }
         let resources: [URL: Resource] = try await service.loadResources(in: directory)
         return resources.map { ($0.key, $0.value) }
+    }
+
+    /// 已安装列表缓存的 key。
+    private func listCacheKey() -> String {
+        "installed|\(id)|\(type.rawValue)|\(directorySignature())"
+    }
+
+    /// 目录签名：路径 + 修改时间 + 文件数。
+    ///
+    /// 只按时间过期不够——刚装完一个 Mod 也得等 10 分钟才显示就太蠢了。
+    /// 目录的 mtime 在增删文件时会变，文件数则兜住「同秒内替换同名文件」。
+    private func directorySignature() -> String {
+        guard let instance else { return "missing" }
+        let directories: [URL]
+        if type == .datapack {
+            directories = saveNames().map { instance.url.appending(path: "saves/\($0)/datapacks") }
+        } else {
+            directories = [directory()].compactMap { $0 }
+        }
+        return directories.map { url in
+            let modification: TimeInterval = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate?.timeIntervalSince1970 ?? 0
+            let count: Int = (try? FileManager.default.contentsOfDirectory(atPath: url.path).count) ?? 0
+            return "\(url.path)#\(Int(modification))#\(count)"
+        }
+        .joined(separator: ";")
     }
 
     /// 实例里所有存档的名字。

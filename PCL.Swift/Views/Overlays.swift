@@ -59,9 +59,13 @@ struct MessageBoxOverlay: View {
                 animationHideWorkItem = workItem
                 let duration: CGFloat = 0.15
                 DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
-                withAnimation(.easeOut(duration: duration)) {
+                // 退场对齐 PCL2 的 MyMsgText.Close：
+                // 80ms 淡出（延迟 20ms）、150ms 下移 20pt、150ms 转到 6°。
+                withAnimation(.easeOut(duration: 0.08).delay(0.02)) {
                     opacity = 0
-                    offsetY = 60
+                }
+                withAnimation(.easeOut(duration: duration)) {
+                    offsetY = 20
                 }
                 withAnimation(.easeIn(duration: duration)) {
                     rotation = 6
@@ -83,7 +87,9 @@ struct HintOverlay: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .animation(.easeOut(duration: 0.2), value: hintManager.hints)
+        // 只对"增删"做布局动画：退场进度（isDismissing）由每条提示自己播，
+        // 挂在容器上会把它的曲线一起换掉。
+        .animation(.easeOut(duration: 0.2), value: hintManager.hints.map(\.id))
         .padding(.bottom, 100)
         // 纯展示层，不能吃掉下面的点击。
         .allowsHitTesting(false)
@@ -102,14 +108,22 @@ private struct HintView: View {
         ZStack(alignment: .leading) {
             RightRoundedRectangle(cornerRadius: 5)
                 .fill(color)
-                .frame(height: 22)
+                .frame(height: HintExit.height)
             MyText(model.text, color: .white)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 4)
         }
-        .opacity(appeared ? 1 : 0)
-        .offset(x: appeared ? 0 : -50)
+        .frame(height: HintExit.height)
         .fixedSize(horizontal: true, vertical: false)
+        .opacity(!appeared ? 0 : (model.isDismissing ? 0 : 1))
+        .animation(HintExit.fadeAnimation, value: model.isDismissing)
+        // 退场对齐 PCL2 的 ModMain「Hint Hide」：200ms 左移 50pt + 150ms 淡出 +
+        // 100ms 高度收 0，全部结束后才从列表里删掉。
+        .offset(x: appeared ? (model.isDismissing ? HintExit.slideOffset : 0) : HintExit.slideOffset)
+        .animation(HintExit.slideAnimation, value: model.isDismissing)
+        .frame(height: model.isDismissing ? 0 : HintExit.height, alignment: .top)
+        .clipped()
+        .animation(HintExit.collapseAnimation, value: model.isDismissing)
         .animation(.spring(duration: 0.2, bounce: 0), value: appeared)
         .onAppear {
             appeared = true

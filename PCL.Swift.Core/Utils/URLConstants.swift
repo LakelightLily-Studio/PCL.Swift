@@ -55,6 +55,8 @@ public struct URLConstants {
     public static let tempURL: URL = applicationSupportURL.appending(path: "Temp")
     public static let authlibInjectorURL: URL = applicationSupportURL.appending(path: "authlib-injector.jar")
     public static let easyTierURL: URL = applicationSupportURL.appending(path: "EasyTier")
+    /// 背景图片目录（对齐 PCL2 的 PCL/Pictures）：放进去的图片会在启动时随机挑一张。
+    public static let picturesDirectoryURL: URL = applicationSupportURL.appending(path: "Pictures")
     
     public static func createDirectories() throws {
         let fileManager: FileManager = .default
@@ -63,5 +65,6 @@ public struct URLConstants {
         try fileManager.createDirectory(at: cacheURL, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: tempURL, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: easyTierURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: picturesDirectoryURL, withIntermediateDirectories: true)
     }
 }

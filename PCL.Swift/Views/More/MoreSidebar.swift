@@ -21,5 +21,6 @@ struct MoreSidebar: Sidebar {
             )
             Spacer()
         }
+        .padding(.top, 12)
     }
 }

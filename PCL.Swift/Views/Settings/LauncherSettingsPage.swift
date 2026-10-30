@@ -29,19 +29,25 @@ struct LauncherSettingsPage: View {
     )
     @State private var updatePrompt: UpdatePromptMode = LauncherConfig.shared.ignoreLauncherUpdates ? .off : .notify
     @State private var autoSetGameLanguage: Bool = LauncherConfig.shared.autoSetGameLanguage
-    /// 文件名模板与资源标题样式。改动即生效，落盘由 LauncherConfig 自己防抖。
-    @State private var fileNameFormat: String = LauncherConfig.shared.resourceFileNameFormat
+    /// 文件名格式与资源标题样式。改动即生效，落盘由 LauncherConfig 自己防抖。
+    @State private var fileNameFormat: ResourceFileName.Format = LauncherConfig.shared.resourceFileNameFormat
     @State private var titleStyle: LauncherConfig.ResourceTitleStyle = LauncherConfig.shared.resourceTitleStyle
+    /// 缓存设置：资源列表（开关 + 时间限制）与图标（开关，开启即落盘）。
+    @State private var enableListCache: Bool = LauncherConfig.shared.enableResourceListCache
+    @State private var listCacheMinutes: Int = LauncherConfig.shared.resourceListCacheMinutes
+    @State private var enableImageCache: Bool = LauncherConfig.shared.enableImageCache
 
     var body: some View {
         CardContainer {
             downloadCard
             communityCard
                 .cardIndex(1)
-            accessibilityCard
+            cacheCard
                 .cardIndex(2)
-            launcherCard
+            accessibilityCard
                 .cardIndex(3)
+            launcherCard
+                .cardIndex(4)
         }
         .onAppear {
             // 原版这一行就是独立的版本列表源。历史配置里可能是「跟随文件下载源」，
@@ -124,7 +130,10 @@ struct LauncherSettingsPage: View {
                     placeholderText("尽量使用官方源")
                 }
                 SettingRow("文件名格式", labelWidth: 140) {
-                    MyTextField(text: $fileNameFormat, placeholder: ResourceFileName.defaultTemplate)
+                    // 与原版一致：下拉框里直接是「译名 + 原始文件名」的示例，
+                    // 选中哪一项就知道落盘会叫什么名字。
+                    MySelect($fileNameFormat, entries: ResourceFileName.Format.allCases)
+                        .frame(maxWidth: .infinity)
                         .onChange(of: fileNameFormat) { newValue in
                             LauncherConfig.shared.resourceFileNameFormat = newValue
                             configObserver.touch()
@@ -139,22 +148,73 @@ struct LauncherSettingsPage: View {
                         }
                 }
                 MyText("文件名预览：" + fileNamePreview, size: 12, color: .colorGray3)
-                MyTip(text: "文件名格式支持 {name}、{version}、{loader}、{type} 四个占位符；渲染不出内容时会回退成原始文件名。本启动器还没有译名数据源，所以 {name} 就是资源本身的名字。「来源」仍是占位：社区资源目前只接入了 Modrinth。", theme: .blue)
             }
         }
     }
 
-    /// 拿一条真实项目渲染模板：占位符的效果直接看得见，不用猜。
+    /// 拿一条真实项目渲染一次：格式的效果直接看得见，不用猜。
     private var fileNamePreview: String {
         ResourceFileName.format(
-            template: fileNameFormat,
-            name: "create",
-            version: "1.21.1-6.0.4",
-            loader: .forge,
-            type: .mod,
-            fileExtension: "jar",
-            fallback: "create-1.21.1-6.0.4.jar"
+            format: fileNameFormat,
+            name: "机械动力",
+            originalName: "create-1.21.1-6.0.4.jar",
+            type: .mod
         )
+    }
+
+    // MARK: - 缓存
+
+    private var cacheCard: some View {
+        MyCard("缓存", foldable: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                SettingRow("资源列表", labelWidth: 140) {
+                    MyComboBox(checked: $enableListCache, text: "启用资源列表缓存")
+                        .onChange(of: enableListCache) { newValue in
+                            LauncherConfig.shared.enableResourceListCache = newValue
+                            // 关掉时立刻清空，避免"关了还在用旧数据"。
+                            if !newValue {
+                                ResourceCacheCenter.shared.clearLists()
+                            }
+                            configObserver.touch()
+                        }
+                }
+
+                SettingRow("时间限制", labelWidth: 140) {
+                    MySelect($listCacheMinutes, entries: [10, 30])
+                        .frame(width: 140)
+                        .disabled(!enableListCache)
+                        .opacity(enableListCache ? 1 : 0.5)
+                        .onChange(of: listCacheMinutes) { newValue in
+                            LauncherConfig.shared.resourceListCacheMinutes = newValue
+                            configObserver.touch()
+                        }
+                    MyText("分钟", size: 12, color: .colorGray3)
+                    Spacer()
+                }
+
+                SettingRow("图标", labelWidth: 140) {
+                    MyComboBox(checked: $enableImageCache, text: "启用图标缓存")
+                        .onChange(of: enableImageCache) { newValue in
+                            LauncherConfig.shared.enableImageCache = newValue
+                            // 「关了就没缓存」：内存与磁盘一起清掉。
+                            if !newValue {
+                                ResourceCacheCenter.shared.clearImages()
+                            }
+                            configObserver.touch()
+                        }
+                }
+
+                MyText(
+                    "资源列表缓存：搜索结果与已安装模组列表会缓存在内存里，翻页、切子页面、重复搜索同一条件时"
+                    + "不再重新加载，超过时间限制后自动失效。\n"
+                    + "图标缓存：资源图标会写入缓存目录，下次打开不必重新下载；关掉后每次都从网络获取。",
+                    size: 12,
+                    color: .colorGray3
+                )
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     // MARK: - 辅助功能

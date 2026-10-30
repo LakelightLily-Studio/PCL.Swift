@@ -108,10 +108,11 @@ struct InstanceConfigPage: View {
     private var memoryCard: some View {
         MyCard("内存分配", foldable: false) {
             VStack(alignment: .leading, spacing: 12) {
+                // 内存分配是单选：与原版一样用圆形单选框，不用方形复选框。
                 HStack(spacing: 20) {
-                    MyComboBox(checked: memoryModeBinding(nil), text: "跟随全局设置", allowsUncheck: false)
-                    MyComboBox(checked: memoryModeBinding(.automatic), text: "自动配置", allowsUncheck: false)
-                    MyComboBox(checked: memoryModeBinding(.custom), text: "自定义", allowsUncheck: false)
+                    MyRadioBox(checked: memoryModeBinding(nil), text: "跟随全局设置")
+                    MyRadioBox(checked: memoryModeBinding(.automatic), text: "自动配置")
+                    MyRadioBox(checked: memoryModeBinding(.custom), text: "自定义")
                     Spacer(minLength: 0)
                 }
 

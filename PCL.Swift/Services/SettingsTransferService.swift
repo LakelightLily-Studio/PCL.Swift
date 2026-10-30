@@ -34,6 +34,15 @@ public enum SettingsTransferService {
         var navigationBarBackground: String?
         var titleBarLogoType: String?
         var titleBarText: String?
+        var backgroundImageSuit: String?
+        var backgroundImageOpacity: Int?
+        var backgroundImageBlur: Int?
+        var backgroundColorful: Bool?
+        var resourceFileNameFormat: String?
+        var resourceTitleStyle: String?
+        var enableResourceListCache: Bool?
+        var resourceListCacheMinutes: Int?
+        var enableImageCache: Bool?
         var gameWindowType: String?
         var gameWindowWidth: Int?
         var gameWindowHeight: Int?
@@ -68,6 +77,16 @@ public enum SettingsTransferService {
             navigationBarBackground: config.navigationBarBackground.rawValue,
             titleBarLogoType: config.titleBarLogoType.rawValue,
             titleBarText: config.titleBarText,
+            // 背景图片本身是用户本机的文件，不跟着设置走；只导出样式参数。
+            backgroundImageSuit: config.backgroundImageSuit.rawValue,
+            backgroundImageOpacity: config.backgroundImageOpacity,
+            backgroundImageBlur: config.backgroundImageBlur,
+            backgroundColorful: config.backgroundColorful,
+            resourceFileNameFormat: config.resourceFileNameFormat.rawValue,
+            resourceTitleStyle: config.resourceTitleStyle.rawValue,
+            enableResourceListCache: config.enableResourceListCache,
+            resourceListCacheMinutes: config.resourceListCacheMinutes,
+            enableImageCache: config.enableImageCache,
             gameWindowType: config.gameWindowType.rawValue,
             gameWindowWidth: config.gameWindowWidth,
             gameWindowHeight: config.gameWindowHeight,
@@ -123,6 +142,16 @@ public enum SettingsTransferService {
         if let raw = settings.navigationBarBackground, let value = NavigationBarBackground(rawValue: raw) { config.navigationBarBackground = value; applied += 1 }
         if let raw = settings.titleBarLogoType, let type = TitleBarLogoType(rawValue: raw) { config.titleBarLogoType = type; applied += 1 }
         apply(settings.titleBarText) { config.titleBarText = $0 }
+
+        if let raw = settings.backgroundImageSuit, let value = BackgroundImageSuit(rawValue: raw) { config.backgroundImageSuit = value; applied += 1 }
+        apply(settings.backgroundImageOpacity) { config.backgroundImageOpacity = $0 }
+        apply(settings.backgroundImageBlur) { config.backgroundImageBlur = $0 }
+        apply(settings.backgroundColorful) { config.backgroundColorful = $0 }
+        if let raw = settings.resourceFileNameFormat, let value = ResourceFileName.Format(rawValue: raw) { config.resourceFileNameFormat = value; applied += 1 }
+        if let raw = settings.resourceTitleStyle, let value = LauncherConfig.ResourceTitleStyle(rawValue: raw) { config.resourceTitleStyle = value; applied += 1 }
+        apply(settings.enableResourceListCache) { config.enableResourceListCache = $0 }
+        apply(settings.resourceListCacheMinutes) { config.resourceListCacheMinutes = $0 }
+        apply(settings.enableImageCache) { config.enableImageCache = $0 }
 
         if let raw = settings.gameWindowType, let type = GameWindowType(rawValue: raw) { config.gameWindowType = type; applied += 1 }
         apply(settings.gameWindowWidth) { config.gameWindowWidth = $0 }

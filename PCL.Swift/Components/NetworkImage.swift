@@ -23,9 +23,19 @@ struct NetworkImage: View {
     var body: some View {
         imageView
             .task(id: url) {
+                let cacheKey: String = ResourceCacheCenter.imageKey(url, cropRect: cropRect)
+                if let cached = await ResourceCacheCenter.shared.image(for: cacheKey) {
+                    await MainActor.run {
+                        withAnimation(nil) {
+                            self.nsImage = cached
+                        }
+                    }
+                    return
+                }
                 do {
                     let data: Data = try await HTTPClient.shared.get(url).data
                     let nsImage = try makeImage(from: data)
+                    await ResourceCacheCenter.shared.store(nsImage, for: cacheKey)
                     await MainActor.run {
                         withAnimation(nil) {
                             self.nsImage = nsImage

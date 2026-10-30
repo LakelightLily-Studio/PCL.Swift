@@ -101,8 +101,7 @@ enum PageEntrance {
 ///
 /// 每个条目从 x = -25 进来：先 200ms 的 easeOutQuad 补 5pt，
 /// 再用 300ms 的 AniEaseOutBack(Weak)（p = 2）补剩下的 20pt，
-/// 同时 100ms 内淡入。PCL2 是逐条目错峰（30ms 起、每项递减 2ms），
-/// 这里对整块侧边栏统一播放：逐条目需要每列显式编号，收益不值这个复杂度。
+/// 同时 100ms 内淡入；条目之间按原版的公式逐条错峰（见 `delay(for:)`）。
 enum SidebarEntrance {
     static var duration: Double { 0.3 * PageAnimationDebug.factor }
     static let startOffset: CGFloat = -25
@@ -111,11 +110,18 @@ enum SidebarEntrance {
     static let remainingLift: CGFloat = 20
     static var fadeDuration: Double { 0.1 * PageAnimationDebug.factor }
 
-    /// 逐条目错峰。PCL2 的计数器是 `Delay += Math.Max(15 - Id, 7) * 2`（30…14ms），
-    /// 但它把每个控件（含图标、文本）都算一格，相邻条目实际差 30ms 以上；
-    /// 我们一条目只算一格，所以直接用 35ms/条（封顶 8 条），观感才对得上。
+    /// 逐条目错峰，直接照抄 PCL2 的 `Delay += Math.Max(15 - Id, 7) * 2`：
+    /// 第 0 条 0ms，之后每条依次多 30 / 28 / 26 / 24 / 22 / 20 / 18 / 16 / 14…ms，
+    /// 累计就是 0、30、58、84、108、130、150、168、184、198…
+    ///
+    /// PCL2 的 `GetAllAnimControls` 把 MyListItem 整个算作**一格**（图标与文字不单独计数），
+    /// 所以这里的序号与它一一对应，不需要再放大步长。
     static func delay(for index: Int) -> Double {
-        Double(min(max(index, 0), 8)) * 0.035 * PageAnimationDebug.factor
+        var milliseconds: Double = 0
+        for step in 0..<max(index, 0) {
+            milliseconds += Double(max(15 - step, 7) * 2)
+        }
+        return milliseconds / 1000 * PageAnimationDebug.factor
     }
 
     static func opacity(at progress: Double) -> Double {

@@ -111,9 +111,10 @@ struct GameSettingsPage: View {
     private var memoryCard: some View {
         MyCard("内存分配", foldable: false) {
             VStack(alignment: .leading, spacing: 12) {
+                // 内存分配是单选：与原版一样用圆形单选框，不用方形复选框。
                 HStack(spacing: 20) {
-                    MyComboBox(checked: automaticModeBinding, text: MemoryAllocationMode.automatic.description, allowsUncheck: false)
-                    MyComboBox(checked: customModeBinding, text: MemoryAllocationMode.custom.description, allowsUncheck: false)
+                    MyRadioBox(checked: automaticModeBinding, text: MemoryAllocationMode.automatic.description)
+                    MyRadioBox(checked: customModeBinding, text: MemoryAllocationMode.custom.description)
                     Spacer()
                 }
 

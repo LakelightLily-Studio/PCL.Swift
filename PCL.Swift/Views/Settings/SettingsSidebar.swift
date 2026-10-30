@@ -24,10 +24,12 @@ struct SettingsSidebar: Sidebar {
         VStack {
             MyNavigationList(
                 .init(.gameSettings, .iconLaunchPage, "启动"),
-                .init(.personalizationSettings, .iconSun, "个性化"),
+                .init(.personalizationSettings, .iconPersonalization, "个性化"),
                 .init(.launcherSettings, .iconMorePage, "其他")
             )
             Spacer()
         }
+        // 原版的条目列表从顶部 12pt 起排（MyPageLeft 里的 StackPanel Margin="0,12,0,0"）。
+        .padding(.top, 12)
     }
 }

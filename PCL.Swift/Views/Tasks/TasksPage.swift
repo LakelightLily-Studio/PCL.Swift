@@ -14,34 +14,20 @@ struct TasksPage: View {
     
     var body: some View {
         CardContainer {
-            if Metadata.debugMode {
-                MyCard(nil) {
-                    HStack {
-                        MyButton("添加一个任务") {
-                            let task: MyTask<EmptyModel> = .init(
-                                name: "一个任务", model: EmptyModel(),
-                                .init(0, "子任务1（等待 1s）") { _, _ in try await Task.sleep(seconds: 1) },
-                                .init(0, "子任务2（与 子任务1 同时执行，等待 2s）") { task, _ in
-                                    try await Task.sleep(seconds: 1)
-                                    await task.setProgressAsync(0.5)
-                                    try await Task.sleep(seconds: 1)
-                                },
-                                .init(1, "子任务3（等待 1s）") { _, _ in try await Task.sleep(seconds: 1) }
-                            )
-                            taskManager.execute(task: task)
-                        }
-                        .frame(width: 100)
-                        Spacer()
-                    }
-                    .frame(height: 40)
-                }
-            }
             if taskManager.tasks.isEmpty {
                 MyLoading(viewModel: loadingVM)
             } else {
                 ForEach(taskManager.tasks.filter(\.display)) { task in
                     TaskCard(task)
+                        // 任务结束时卡片淡出并缩到 0.92 后再移除（PCL2 的 MyCard.AniDispose）。
+                        // 插入不做过渡：卡片自己的入场动画已经管了那一段。
+                        .transition(.asymmetric(
+                            insertion: .identity,
+                            removal: .opacity.combined(with: .scale(scale: 0.92))
+                        ))
                 }
+                // 只在任务增删时驱动过渡：进度更新（tasks 内的 @Published）不触发。
+                .animation(.easeOut(duration: 0.2), value: taskManager.tasks.map(\.id))
             }
         }
     }

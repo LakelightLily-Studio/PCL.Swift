@@ -55,9 +55,19 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
                     }
             }
             
+            // 底色拆成两层：恒定的半透明白 + 只动不透明度的主题色。
+            // 早先是「悬停 color7 / 平时 white.opacity(0.5)」二选一，
+            // 两端的色相与透明度同时变化，过渡中间会发灰。
             RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(foregroundColor, lineWidth: 1.5, antialiased: false)
-                .background(backgroundColor)
+                .fill(Color.white.opacity(0.5))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.color7.opacity(hovered ? 1 : 0))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(foregroundColor, lineWidth: 1.5, antialiased: false)
+                }
                 .allowsHitTesting(false)
             
             HStack {
@@ -125,10 +135,6 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
         hovered ? .color4 : .color5
     }
     
-    private var backgroundColor: Color {
-        hovered ? .color7 : .white.opacity(0.5)
-    }
-    
     private func close() {
         if let observer {
             NotificationCenter.default.removeObserver(observer)
@@ -182,7 +188,13 @@ private struct PopupView<Entry: Hashable & CustomStringConvertible>: View {
                         .frame(height: 26)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
-                        .background(selectedEntry == entry ? Color.color6 : hoveredEntry == entry ? .color7 : .clear)
+                        // 同一条规矩：未悬停用 color7 的 0 不透明度，不要 .clear，
+                        // 否则淡出时会先经过一段灰。
+                        .background(
+                            selectedEntry == entry
+                                ? Color.color6
+                                : Color.color7.opacity(hoveredEntry == entry ? 1 : 0)
+                        )
                         .onTapGesture {
                             onSelect(entry)
                         }

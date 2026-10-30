@@ -1,13 +1,13 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
-    "category.modrinth.8x-" : {
+    "category.modrinth.128x" : {
       "extractionState" : "manual",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "极简"
+            "value" : "128x"
           }
         }
       }
@@ -19,6 +19,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "16x"
+          }
+        }
+      }
+    },
+    "category.modrinth.256x" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "256x"
           }
         }
       }
@@ -45,6 +56,17 @@
         }
       }
     },
+    "category.modrinth.512x+" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超高清"
+          }
+        }
+      }
+    },
     "category.modrinth.64x" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -56,35 +78,13 @@
         }
       }
     },
-    "category.modrinth.128x" : {
+    "category.modrinth.8x-" : {
       "extractionState" : "manual",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "128x"
-          }
-        }
-      }
-    },
-    "category.modrinth.256x" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "256x"
-          }
-        }
-      }
-    },
-    "category.modrinth.512x+" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超高清"
+            "value" : "极简"
           }
         }
       }
@@ -217,6 +217,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "装饰"
+          }
+        }
+      }
+    },
+    "category.modrinth.economy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "经济"
           }
         }
       }

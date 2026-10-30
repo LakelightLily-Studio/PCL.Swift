@@ -13,6 +13,7 @@ struct ContentView: View {
     @ObservedObject private var router: AppRouter = .shared
     @ObservedObject private var easterEggManager: EasterEggManager = .shared
     @ObservedObject private var themeManager: ThemeManager = .shared
+    @ObservedObject private var configObserver: LauncherConfigObserver = .shared
     
     @EnvironmentObject private var instanceManager: InstanceManager
     
@@ -28,11 +29,14 @@ struct ContentView: View {
                 AppRouterView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            // 背景图片铺在内容区最底层（标题栏以下），与 PCL2 的 ImgBack 位置一致。
+            .background { BackgroundImageView() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // 消息框与提示条已上移到 RootView（向导阶段也要能弹），这里只留页面内的浮层。
         .overlay { ExtraButtonsOverlay() }
-        .background(Color.colorBackground)
+        // 页面底色：默认是主题色的浅色，「叠加彩色背景」关掉时退回中性灰（PCL2 的 #f5f5f5）。
+        .background(LauncherConfig.shared.backgroundColorful ? Color.colorBackground : Color.colorGray8)
         // 主题色是计算属性，切换后需要重建视图树才能整体换色。
         // 用 revision 而不是主题名：自定义主题拖滑杆时只有 revision 会变。
         .id(themeManager.revision)
@@ -78,8 +82,12 @@ private struct ExtraButtonsOverlay: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            ExtraButton(.iconDownloadPage, showTasksButton) {
-                router.append(.tasks)
+            // 新增任务时右下角的任务按钮荡开一圈水波（原版 MyExtraButton.Ribble）。
+            ZStack {
+                TaskAddedRipple(trigger: taskManager.tasks.count)
+                ExtraButton(.iconDownloadPage, showTasksButton) {
+                    router.append(.tasks)
+                }
             }
             // Minecraft 与 DSH 共用这颗电源按钮，谁在跑就停谁。
             ExtraButton(.iconPower, launchManager.isRunning || dshManager.isRunning) {
@@ -106,6 +114,43 @@ private struct ExtraButtonsOverlay: View {
         !taskManager.tasks.filter(\.display).isEmpty && router.last != .tasks
     }
     
+    /// 新增任务时从任务按钮荡开的水波。
+    ///
+    /// 对齐 PCL2 的 `MyExtraButton.Ribble()`：插入一个半透明的圆，1000ms 内放大到 13 倍
+    /// 并淡到 0（AniEaseInoutFluent(Strong)），**不裁剪**——原版就是让它铺到窗口上去。
+    private struct TaskAddedRipple: View {
+        let trigger: Int
+        @State private var progress: Double = 0
+        @State private var lastTrigger: Int = 0
+
+        var body: some View {
+            Circle()
+                .fill(Color.color5)
+                .opacity(progress > 0 ? 0.5 * (1 - progress) : 0)
+                .frame(width: 40, height: 40)
+                .scaleEffect(1 + 12 * progress, anchor: .center)
+                .allowsHitTesting(false)
+                .onAppear { lastTrigger = trigger }
+                .onChange(of: trigger) { newValue in
+                    // 只有「多了一个任务」才荡一下：任务完成被移除时不该有反馈。
+                    defer { lastTrigger = newValue }
+                    guard newValue > lastTrigger else { return }
+                    play()
+                }
+        }
+
+        private func play() {
+            progress = 0
+            withAnimation(.timingCurve(0.7, 0, 0.3, 1, duration: 1)) {
+                progress = 1
+            }
+            // 动画跑完后归零（此时不透明度已经是 0，看不到跳变）。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.05) {
+                progress = 0
+            }
+        }
+    }
+
     private struct ExtraButton: View {
         @State private var hovered: Bool = false
         @State private var pressed: Bool = false
@@ -143,7 +188,14 @@ private struct ExtraButtonsOverlay: View {
                 .padding(show ? 4 : 0)
                 .animation(.linear(duration: 0.15), value: hovered)
                 .animation(.easeOut(duration: 0.15), value: pressed)
-                .animation(.spring(response: 0.4), value: show)
+                // 出现 / 消失对齐 PCL2 的 MyExtraButton.Show：
+                // 出现是 500ms 的 AniEaseOutBack(Weak)（延迟 60ms），消失是 100ms 的 AniEaseInFluent(Weak)。
+                .animation(
+                    show
+                        ? .timingCurve(0.34, 1.56, 0.64, 1, duration: 0.5).delay(0.06)
+                        : .timingCurve(0.55, 0.06, 0.68, 0.19, duration: 0.1),
+                    value: show
+                )
         }
     }
 }

@@ -256,6 +256,8 @@ private struct CardChrome: ViewModifier {
     let index: Int
     let entranceEnabled: Bool
     @ObservedObject var interactionState: CardInteractionState
+    /// 页面是否正在退场（由 AppRouterView 注入）。
+    @Environment(\.pageExiting) private var pageExiting: Bool
 
     func body(content: Content) -> some View {
         content
@@ -288,6 +290,14 @@ private struct CardChrome: ViewModifier {
             // 入场动画统一走 PageEntrance（对齐 PCL2 的页面切换动画）。
             .modifier(PageEntranceShape(progress: appeared ? 1 : 0, enabled: entranceEnabled))
             .animation(entranceEnabled ? PageEntrance.animation(for: index) : nil, value: appeared)
+            // 退场：PCL2 的 TriggerExitAnimation 对每张卡片做 70ms 线性淡出 + 上移 6pt，
+            // 相邻卡片错峰 15ms。序号沿用 .cardIndex(n)，与入场共用同一套编号。
+            .modifier(ControlExitShape(
+                progress: pageExiting ? 1 : 0,
+                offset: CGSize(width: 0, height: PageExit.offset),
+                enabled: entranceEnabled
+            ))
+            .animation(entranceEnabled ? PageExit.animation(for: index) : nil, value: pageExiting)
             // 悬停的 90ms 与 PCL2 的 MyCard_MouseEnter/MouseLeave 一致。
             .animation(CardFold.hover, value: showHovered)
     }
