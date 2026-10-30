@@ -480,9 +480,20 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
 
 ## 主页与社区资源命名
 
-- **主页默认是空白**：原来的「启动器主页」（账号皮肤 / 更新公告 / Minecraft 新闻整页）已删除。
-  HomepageType 只剩 empty / preset / local / remote / demo，默认 `.empty`；旧配置里的 dashboard
-  解码失败后自动落到 `.empty`，不需要额外迁移代码。想要回那块主页就得重写视图并加回 case。
+- **主页默认是「预设 → PCL.Swift 更新日志」**：原来的「启动器主页」（账号皮肤 / 更新公告 /
+  Minecraft 新闻整页）已删除，后来由预设重新给主页填内容。HomepageType 仍是
+  empty / preset / local / remote / demo，默认 `.preset`；HomepagePreset 的**第一项是 `changelog`**
+  （下拉框顺序就是声明顺序，第一项即默认值）。用户自己选过的值照旧——旧配置里存着 `empty`
+  就还是空白，只有缺这个键或解码失败（旧的 dashboard）才落到默认。
+- **更新日志主页**（`Views/Launch/Homepage/ChangelogHomepageView.swift`）：每个版本一张卡片、
+  `folded: false` 默认展开，标题带上「（当前版本）」。它是原生视图，**不套**自定义主页那层
+  「仍处于测试阶段」的提示。内容来源见下一节，**不要**改成只读网络：断网或首次启动时也得有东西可看。
+- **更新日志怎么取**（`Services/ChangelogLoader.swift`）：国内分发仓库的 `changelog.md` →
+  上次成功的缓存（`Caches/Changelog/changelog.md`）→ 打包进 App 的 `Resources/CHANGELOG.md`。
+  仓库根目录的 `CHANGELOG.md` 才是源头：`build.yml` 构建前会复制到 `Resources/`
+  （本地开发记得手动 `cp CHANGELOG.md Resources/CHANGELOG.md`），`publish-dist.sh` 发版时同步到国内仓库。
+  解析在 Core 的 `ChangelogParser`，只认本仓库实际用到的语法（`##` 版本 / `###` 小节 / `-` 条目 /
+  `**加粗**` / 反引号代码），**不要**换成通用 Markdown 解析器：多支持一种语法就多一处会解析错的地方。
 - **文件名格式**：只有 Core 的 ResourceFileName 一处实现（设置 → 其他 → 社区资源），
   下载落点（ResourceInstallViewModel）只调用它，不要各自拼字符串。
   取值与 PCL2 的 `ToolDownloadTranslateV2` 一一对应：`【译名】文件名` / `[译名] 文件名`（默认）/
@@ -527,6 +538,21 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
       关掉会同时清内存与磁盘（关了就没缓存）。key 是「URL + 裁剪区域」，同一张头像的
       原图与裁剪图不能共用一份。
     搜索结果**不要落盘**：换源或换筛选后，磁盘缓存很容易给出过期数据。
+
+## 国内静态资源（更多页头像 / 更新日志）
+
+- 地址拼装只有一处：Core 的 `DomesticAssets`。同一份资源给三条取法
+  （api.gitcode.com 的 raw → raw.gitcode.com → gitee），顺序与 `UpdateManifestClient.entryPoints` 一致，
+  只是针对单个文件。**不要**在视图里硬编码地址。
+- 「更多 → 关于与鸣谢」的头像走 `Components/DomesticImage.swift`：先取 `assets/about/<Name>.png`
+  （文件名 = Assets.xcassets 里 imageset 的名字），失败时显示打包在 App 里的同一张图。
+  所以头像**仍然留在 Assets.xcassets 里**当兜底，不要因为"已经托管到服务端了"就把本地那份删掉。
+- 失败会记 5 分钟（`DomesticImageCache`），期间不再重试：GitCode 挂掉时不该每进一次关于页就打 24 个请求，
+  但网络恢复后要能自己好起来，所以不是永久拉黑。
+- 推送由 `Scripts/publish-dist.sh` 负责：头像从 imageset 里挑最高分辨率的位图（`@3x` > `@2x` > 1x），
+  `changelog.md` 直接复制仓库根目录那份。只有 PCLProto 是纯 SVG——CI 在 ubuntu 上没有 SVG 转位图的工具，
+  它的 PNG 预渲染后放在 `dist-assets/about/`（该目录不参与 App 构建，别把它挪进 `Resources/` 或
+  `PCL.Swift/`，否则会被同步组当成资源打进包里）。
 
 ## 启动器更新渠道
 
