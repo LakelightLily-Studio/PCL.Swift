@@ -13,17 +13,17 @@ struct AboutPage: View {
         CardContainer {
             StaticCard("关于") {
                 VStack(spacing: 0) {
-                    ProfileView(.local(.ltCatt), "龙腾猫跃", "Plain Craft Launcher 的作者！",
+                    ProfileView(.init("LTCatt", fallback: .ltCatt), "龙腾猫跃", "Plain Craft Launcher 的作者！",
                                 .init("GitHub 主页", "https://github.com/LTCatt"),
                                 .init("前往赞助", "https://afdian.com/a/LTCat"))
                     
-                    ProfileView(.local(.functy), "Functy", "PCL.Swift 的作者",
+                    ProfileView(.init("Functy", fallback: .functy), "Functy", "PCL.Swift 的作者",
                                 .init("GitHub 主页", "https://github.com/functy23"))
                     
-                    ProfileView(.local(.lakelightLily), "LakelightLily Studio", "PCL.Swift 的开发团队",
+                    ProfileView(.init("LakelightLily", fallback: .lakelightLily), "LakelightLily Studio", "PCL.Swift 的开发团队",
                                 .init("GitHub 主页", "https://github.com/LakelightLily-Studio"))
                     
-                    ProfileView(.local(.pclMac), "PCL.Swift", "当前版本：\(Metadata.appVersion) (\(Metadata.bundleVersion))",
+                    ProfileView(.init("PCLMac", fallback: .pclMac), "PCL.Swift", "当前版本：\(Metadata.appVersion) (\(Metadata.bundleVersion))",
                                 .init("GitHub 仓库", "https://github.com/LakelightLily-Studio/PCL.Swift"),
                                 .init("问题反馈", "https://github.com/LakelightLily-Studio/PCL.Swift/issues"))
                 }
@@ -35,16 +35,16 @@ struct AboutPage: View {
             
             StaticCard("特别鸣谢") {
                 VStack(spacing: 0) {
-                    ProfileView(.local(.pclCommunity), "PCL Community", "Plain Craft Launcher 非官方社区",
+                    ProfileView(.init("PCLCommunity", fallback: .pclCommunity), "PCL Community", "Plain Craft Launcher 非官方社区",
                                 .init("GitHub 主页", "https://github.com/PCL-Community"))
                     
-                    ProfileView(.local(.pclProto), "PCL.Proto", "以 PCL2 和 PCL2-CE 为蓝本，旨在为各 PCL 分支版本提供一个标准化的原型样本。",
+                    ProfileView(.init("PCLProto", fallback: .pclProto), "PCL.Proto", "以 PCL2 和 PCL2-CE 为蓝本，旨在为各 PCL 分支版本提供一个标准化的原型样本。",
                                 .init("GitHub 仓库", "https://github.com/PCL-Community/PCL.Proto"))
                     
-                    ProfileView(.local(.bangbang93), "bangbang93", "提供 BMCLAPI 镜像源，详见 https://bmclapi.bangbang93.com",
+                    ProfileView(.init("bangbang93", fallback: .bangbang93), "bangbang93", "提供 BMCLAPI 镜像源，详见 https://bmclapi.bangbang93.com",
                                 .init("前往赞助", "https://afdian.com/a/bangbang93"))
 
-                    ProfileView(.local(.swiftCraftLauncher), "Swift Craft Launcher", "感谢 SCL 开发团队与我们的持续交流与相互启发。",
+                    ProfileView(.init("SwiftCraftLauncher", fallback: .swiftCraftLauncher), "Swift Craft Launcher", "感谢 SCL 开发团队与我们的持续交流与相互启发。",
                                 .init("GitHub 仓库", "https://github.com/suhang12332/Swift-Craft-Launcher"))
                 }
             }
@@ -90,18 +90,12 @@ struct AboutPage: View {
         @Environment(\.disableHoverAnimation) private var cardAppearAnimationPlaying: Bool
         
         private let avatar: Avatar
-        private let avatarURL: URL?
         private let nickname: String
         private let description: String
         private let links: [Link]
         
         init(_ avatar: Avatar, _ nickname: String, _ description: String, _ links: Link...) {
             self.avatar = avatar
-            if case .network(let url) = avatar {
-                self.avatarURL = URL(string: url)
-            } else {
-                self.avatarURL = nil
-            }
             self.nickname = nickname
             self.description = description
             self.links = links
@@ -110,20 +104,11 @@ struct AboutPage: View {
         var body: some View {
             MyListItem {
                 HStack {
-                    Group {
-                        switch avatar {
-                        case .local(let imageResource): Image(imageResource).resizable()
-                        case .network(_):
-                            if let avatarURL {
-                                NetworkImage(url: avatarURL)
-                            } else {
-                                Image(nsImage: .init())
-                            }
-                        }
-                    }
-                    .scaledToFit()
-                    .frame(width: 32, height: 32)
-                    .clipShape(.circle)
+                    // 头像托管在国内分发仓库，换图不用发版；仓库不可达时显示内置的同一张。
+                    DomesticImage(avatar.name, fallback: avatar.fallback)
+                        .scaledToFit()
+                        .frame(width: 32, height: 32)
+                        .clipShape(.circle)
                     // 彩蛋的反色只在真正触发时才挂：.contrast(1) 看似无效果，但它仍会为每个头像
                     // 建立一层离屏合成。关于页有 8 个头像，切页时这 8 层是 AboutPage 慢的主因。
                     .modifier(AvatarContrast(inverted: easterEggManager.modifyColor))
@@ -158,9 +143,16 @@ struct AboutPage: View {
             }
         }
         
-        enum Avatar {
-            case local(ImageResource)
-            case network(url: String)
+        /// 头像。`name` 是国内分发仓库里的文件名（与 Assets.xcassets 的 imageset 同名），
+        /// `fallback` 是打包进 App 的兜底图。
+        struct Avatar {
+            let name: String
+            let fallback: ImageResource
+            
+            init(_ name: String, fallback: ImageResource) {
+                self.name = name
+                self.fallback = fallback
+            }
         }
     }
     

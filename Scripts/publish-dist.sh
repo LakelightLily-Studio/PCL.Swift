@@ -6,7 +6,11 @@
 #     未必可用，而 API raw 直链一直可读，所以二进制跟着仓库走；
 #   - token 只从环境变量读，不落盘、不进 URL（用 GIT_ASKPASS 传）；
 #   - 任何一步失败都返回非 0，由 workflow 决定是否阻断。
+#
+# 只同步静态资源（头像 / 更新日志）时用 ASSETS_ONLY=1：跳过更新包与清单，
+# 其余流程（克隆、提交、推送、重试）完全一样。见 .github/workflows/publish-dist.yml。
 set -eo pipefail
+ASSETS_ONLY=${ASSETS_ONLY:-0}
 
 if [ -z "$GITCODE_TOKEN" ]; then
   echo "缺少 GITCODE_TOKEN" >&2
@@ -42,31 +46,77 @@ else
   git clone --depth 1 "https://$DIST_OWNER@gitcode.com/$DIST_OWNER/$DIST_REPO.git" "$WORKDIR/dist"
 fi
 
-mkdir -p "$WORKDIR/dist/dist"
-cp "$ASSETS_DIR/PCL.Swift-$VERSION-arm64.zip" "$WORKDIR/dist/dist/"
-cp "$ASSETS_DIR/PCL.Swift-$VERSION-x86_64.zip" "$WORKDIR/dist/dist/"
+if [ "$ASSETS_ONLY" != "1" ]; then
+  mkdir -p "$WORKDIR/dist/dist"
+  cp "$ASSETS_DIR/PCL.Swift-$VERSION-arm64.zip" "$WORKDIR/dist/dist/"
+  cp "$ASSETS_DIR/PCL.Swift-$VERSION-x86_64.zip" "$WORKDIR/dist/dist/"
+fi
 
-python3 Scripts/render_update_json.py \
-  --tag "$TAG" \
-  --assets-dir "$ASSETS_DIR" \
-  --out "$WORKDIR/dist/update.json" \
-  --base-url "$API_BASE" \
-  --mirror-base "$RAW_BASE" \
-  --github-base "$GITHUB_BASE" \
-  --notes-url "https://github.com/LakelightLily-Studio/PCL.Swift/releases/tag/$TAG" \
-  --summary "$SUMMARY" \
-  --history "$WORKDIR/dist/channels/stable.json"
+# 头像与更新日志：这两类资源不需要跟着发版走（客户端会自己刷新），
+# 但每次发版顺手同步一次，国内仓库里的副本才不会落后于仓库里的源。
+#   assets/about/<Name>.png —— 「更多」页的头像，文件名 = Assets.xcassets 里 imageset 的名字；
+#   changelog.md            —— 主页预设「PCL.Swift 更新日志」读的那份。
+sync_about_avatars() {
+  local src="PCL.Swift/Assets.xcassets/Avatars"
+  local dst="$WORKDIR/dist/assets/about"
+  local imageset name best candidate png
+  mkdir -p "$dst"
+  for imageset in "$src"/*.imageset; do
+    [ -d "$imageset" ] || continue
+    name=$(basename "$imageset" .imageset)
+    best=""
+    # 取分辨率最高的那张位图；只有 SVG 的（PCLProto）走下面的预渲染补位。
+    for candidate in "$imageset/$name@3x.png" "$imageset/$name@2x.png" "$imageset/$name.png"; do
+      if [ -f "$candidate" ]; then
+        best="$candidate"
+        break
+      fi
+    done
+    if [ -n "$best" ]; then
+      cp "$best" "$dst/$name.png"
+    fi
+  done
+  # SVG 头像没法在 ubuntu 上转位图，仓库里放了一份预渲染的（dist-assets/about）。
+  if [ -d dist-assets/about ]; then
+    for png in dist-assets/about/*.png; do
+      [ -f "$png" ] || continue
+      cp "$png" "$dst/"
+    done
+  fi
+  echo "头像：$(ls "$dst" | wc -l | xargs) 张 → assets/about"
+}
 
-cp "$WORKDIR/dist/update.json" "$WORKDIR/dist/channels/stable.json"
+sync_about_avatars
+cp CHANGELOG.md "$WORKDIR/dist/changelog.md"
+
+if [ "$ASSETS_ONLY" != "1" ]; then
+  python3 Scripts/render_update_json.py \
+    --tag "$TAG" \
+    --assets-dir "$ASSETS_DIR" \
+    --out "$WORKDIR/dist/update.json" \
+    --base-url "$API_BASE" \
+    --mirror-base "$RAW_BASE" \
+    --github-base "$GITHUB_BASE" \
+    --notes-url "https://github.com/LakelightLily-Studio/PCL.Swift/releases/tag/$TAG" \
+    --summary "$SUMMARY" \
+    --history "$WORKDIR/dist/channels/stable.json"
+
+  cp "$WORKDIR/dist/update.json" "$WORKDIR/dist/channels/stable.json"
+fi
+
+COMMIT_MESSAGE="release: $VERSION"
+if [ "$ASSETS_ONLY" = "1" ]; then
+  COMMIT_MESSAGE="assets: 同步头像与更新日志"
+fi
 
 git -C "$WORKDIR/dist" config user.name "pcl-swift-ci"
 git -C "$WORKDIR/dist" config user.email "ci@users.noreply.gitcode.com"
 git -C "$WORKDIR/dist" add -A
 
 if git -C "$WORKDIR/dist" diff --cached --quiet; then
-  echo "清单无变化，跳过提交"
+  echo "国内仓库无变化，跳过提交"
 else
-  git -C "$WORKDIR/dist" commit -m "release: $VERSION"
+  git -C "$WORKDIR/dist" commit -m "$COMMIT_MESSAGE"
   attempt=1
   while [ "$attempt" -le 3 ]; do
     if git -C "$WORKDIR/dist" push origin main; then
@@ -82,4 +132,8 @@ else
   fi
 fi
 
-echo "完成：$API_BASE/update.json?ref=main"
+if [ "$ASSETS_ONLY" = "1" ]; then
+  echo "完成：$API_BASE/assets/about?ref=main"
+else
+  echo "完成：$API_BASE/update.json?ref=main"
+fi

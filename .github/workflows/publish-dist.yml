@@ -1,0 +1,62 @@
+name: Publish dist
+
+# 把产物与静态资源同步到国内分发仓库（GitCode）。
+#
+# 两个用途：
+#   1. 发版后同步更新包与清单（release.yml 的 publish-dist job 也做这件事，
+#      但那个 job 绑在整条发版流水线上；这里可以单独补一次）；
+#   2. assets_only = true 时只推「更多」页头像与更新日志，改张图不用为它发版。
+#
+# token 走 GITCODE_TOKEN secret，不要写进仓库。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要同步的 Release tag（留空则用 Configs/Base.xcconfig 里的当前版本）
+        required: false
+        type: string
+      assets_only:
+        description: 只同步头像与更新日志（跳过更新包与清单）
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve tag
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
+        run: |
+          TAG="$TAG_INPUT"
+          if [ -z "$TAG" ]; then
+            VERSION=$(grep '^MARKETING_VERSION' Configs/Base.xcconfig | cut -d '=' -f2 | xargs)
+            TAG="v$VERSION"
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "同步 $TAG"
+
+      - name: Download release assets
+        # 只取两个更新包；dmg 与 build.xcarchive.zip 不进分发仓库。
+        if: ${{ !inputs.assets_only }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p assets
+          gh release download "$TAG" --pattern 'PCL.Swift-*.zip' --dir assets
+          ls -l assets
+
+      - name: Publish to GitCode
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          TAG: ${{ env.TAG }}
+          ASSETS_ONLY: ${{ inputs.assets_only && '1' || '0' }}
+        run: Scripts/publish-dist.sh
