@@ -65,20 +65,28 @@
               "value" : "none"
             }
           ],
-          "glass" : true,
+          "glass-specializations" : [
+            {
+              "value" : false
+            },
+            {
+              "appearance" : "dark",
+              "value" : true
+            }
+          ],
           "image-name" : "path-8.svg",
           "name" : "path-8",
           "opacity-specializations" : [
             {
-              "value" : 0.7
+              "value" : 1
             },
             {
               "appearance" : "dark",
-              "value" : 0.7
+              "value" : 1
             },
             {
               "appearance" : "tinted",
-              "value" : 0.7
+              "value" : 1
             }
           ],
           "position" : {
@@ -110,20 +118,28 @@
               "value" : "none"
             }
           ],
-          "glass" : true,
+          "glass-specializations" : [
+            {
+              "value" : false
+            },
+            {
+              "appearance" : "dark",
+              "value" : true
+            }
+          ],
           "image-name" : "path-10.svg",
           "name" : "path-10",
           "opacity-specializations" : [
             {
-              "value" : 0.7
+              "value" : 1
             },
             {
               "appearance" : "dark",
-              "value" : 0.7
+              "value" : 1
             },
             {
               "appearance" : "tinted",
-              "value" : 0.7
+              "value" : 1
             }
           ],
           "position" : {
@@ -155,20 +171,28 @@
               "value" : "none"
             }
           ],
-          "glass" : true,
+          "glass-specializations" : [
+            {
+              "value" : false
+            },
+            {
+              "appearance" : "dark",
+              "value" : true
+            }
+          ],
           "image-name" : "path-12.svg",
           "name" : "path-12",
           "opacity-specializations" : [
             {
-              "value" : 0.7
+              "value" : 1
             },
             {
               "appearance" : "dark",
-              "value" : 0.7
+              "value" : 1
             },
             {
               "appearance" : "tinted",
-              "value" : 0.7
+              "value" : 1
             }
           ],
           "position" : {
