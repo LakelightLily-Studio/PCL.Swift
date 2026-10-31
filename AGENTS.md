@@ -112,11 +112,16 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
   `nm -U` 里不应出现 `DevShortcuts`；同一份检查在 Debug 产物上应分别得到 1 与若干符号。
 - demo 分支的 `DemoState` 是另一回事（重播卡片进入动画 + 演示资源快照），不要和这里混用。
 
-### 图标只有 Xcode 26 能编
+### 图标只有 Xcode 27 能编
 
-- `PCL.Swift/AppIcon.icon` 是 Icon Composer 格式，只有 Xcode 26 的 `actool` 会把它编译成 `AppIcon.icns`，
+- `PCL.Swift/AppIcon.icon` 是 Icon Composer 格式，只有 Xcode 26 及以上的 `actool` 会把它编译成 `AppIcon.icns`，
   并写入 `CFBundleIconFile` / `CFBundleIconName`。用 Xcode 16 打包时它只会被当成普通资源拷进
   `Contents/Resources/AppIcon.icon`，产物**没有 icns**，Finder / Dock 显示空白图标（2.0.1、2.0.2 就是这样）。
+- 2.1.1 起玻璃材质是**按外观分档**的（`glass-specializations`：只有深色外观开玻璃，三层主路径的不透明度
+  从 0.7 提到 1）。这个键由 Xcode 27 的 Icon Composer 写出，macOS 作业因此统一跑 runner-images 的
+  `xcode-27` 镜像（macOS 27 + Xcode 27，public preview）；**不要再写 `macos-26`**——那份镜像只带 Xcode 26，
+  编出来的 car 里没有这层分档，macOS 27 上又会退回旧渲染（「PCL」白字半透明、底图透出来）。
+  同一个原因，本机手工出包也得用 Xcode 27（2.1.1 就是这么出的）。
 - 所以**发版请走 CI**：`gh workflow run build.yml -f build_configuration=Release -f arch=arm64 -f sign_app=false`
   （`arch` 取 `arm64` 或 `x86_64`；2.0.4 起按架构分开出包，**不再打通用二进制**，两个架构各跑一次）
   （`sign_app=false` 跳过证书导入、改用 ad-hoc 签名，不需要 `MACOS_*` secret）。
