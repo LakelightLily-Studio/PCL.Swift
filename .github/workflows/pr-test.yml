@@ -20,7 +20,8 @@ jobs:
     secrets: inherit
 
   test:
-    runs-on: macos-26
+    # 与 build.yml 一致：xcode-27 镜像（macOS 27 + Xcode 27）。
+    runs-on: xcode-27
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -29,7 +30,7 @@ jobs:
 
       - name: Run tests
         # 统一走 Scripts/xcodebuild-swift.sh：它会挑可用工具链（装了 Swift 6.4 就用，
-        # 没有就退回 Xcode 自带）。runner 上通常没有 6.4，这里同样能跑通。
+        # 没有就退回 Xcode 自带）。xcode-27 镜像上通常没有 6.4 工具链，Xcode 27 自带的 swiftc 同样编得过。
         run: |
           Scripts/xcodebuild-swift.sh test
 

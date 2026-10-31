@@ -22,7 +22,8 @@ jobs:
     secrets: inherit
 
   release:
-    runs-on: macos-26
+    # 与 build.yml 一致：xcode-27 镜像（macOS 27 + Xcode 27）。公证仍走 notarytool。
+    runs-on: xcode-27
     needs: build
     steps:
       - name: Checkout code

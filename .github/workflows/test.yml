@@ -6,8 +6,8 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      macos_26:
-        description: "macOS 26"
+      xcode_27:
+        description: "macOS 27 (Xcode 27)"
         type: boolean
         default: true
       macos_15:
@@ -16,11 +16,12 @@ on:
         default: false
 
 jobs:
-  test_macos_26:
-    name: Test on macOS 26
+  test_xcode_27:
+    name: Test on macOS 27 (Xcode 27)
     # 手动触发时仍按输入决定；push 事件没有 inputs，默认执行。
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.macos_26 == 'true' }}
-    runs-on: macos-26
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.xcode_27 == 'true' }}
+    # 与 build.yml 一致：xcode-27 镜像（macOS 27 + Xcode 27）。
+    runs-on: xcode-27
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -43,7 +44,7 @@ jobs:
       - name: Upload result
         uses: actions/upload-artifact@v7
         with:
-          name: macos-26.xcresult
+          name: xcode-27.xcresult
           path: result.xcresult
       
       - name: Fail job if tests failed

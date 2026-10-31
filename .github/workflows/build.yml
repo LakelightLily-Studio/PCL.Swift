@@ -55,7 +55,10 @@ on:
 
 jobs:
   build:
-    runs-on: macos-26
+    # xcode-27 镜像 = macOS 27 + Xcode 27（runner-images 的 `xcode-27` label，目前是 public preview）。
+    # 不能用 macos-26：那份镜像只带 Xcode 26，而图标的玻璃分档（glass-specializations）是 Xcode 27 的
+    # Icon Composer 写出来的，macOS 27 上要 Xcode 27 的 actool 编出来的 car 才按分档渲染。
+    runs-on: xcode-27
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -136,7 +139,7 @@ jobs:
               ENABLE_HARDENED_RUNTIME=YES
           elif [ "${{ inputs.build_configuration }}" = "Release" ]; then
             # 没有证书时的 Release：ad-hoc 签名（Sign to Run Locally）。
-            # 仍用 Release 配置与 CI 的 Xcode 26：图标要靠它的 actool 编译 .icon。
+            # 仍用 Release 配置与 CI 的 Xcode 27：图标要靠它的 actool 编译 .icon（含玻璃分档）。
             xcodebuild archive \
               "${COMMON_ARGS[@]}" \
               CODE_SIGN_STYLE=Manual \
