@@ -78,7 +78,7 @@ struct MyTextField: View {
 
     private var backgroundColor: Color {
         if focused || hovered { return .color7 }
-        return .white.opacity(0.5)
+        return .cardBackground.opacity(0.5)
     }
 }
 

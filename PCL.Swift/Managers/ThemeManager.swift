@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import AppKit
 import Core
 
 /// 一整套强调色。
@@ -144,18 +145,38 @@ enum ThemePaletteBuilder {
         Color(.sRGB, red: rgb.r, green: rgb.g, blue: rgb.b, opacity: alpha)
     }
 
-    static func palette(from base: RGB) -> ThemePalette {
+    /// 由基色派生整套色板。
+    ///
+    /// 浅色是「往白里混」，深色是「往黑里混」——但方向要反着看：
+    /// - 浅色：tint → highlight 越走越浅，最后落到接近白色的窗口底色；
+    /// - 深色：同样的顺序越走越深，最后落到接近黑色的窗口底色。
+    /// 强调色（primary / shade）在深色下要**提亮**，否则压在深底上根本看不见。
+    static func palette(from base: RGB, isDark: Bool = false) -> ThemePalette {
         let white: RGB = (1, 1, 1)
         let black: RGB = (0, 0, 0)
+        guard isDark else {
+            return .init(
+                primary: color(base),
+                shade: color(mix(base, black, 0.22)),
+                tint: color(mix(base, white, 0.18)),
+                soft: color(mix(base, white, 0.50)),
+                faint: color(mix(base, white, 0.78)),
+                wash: color(mix(base, white, 0.88)),
+                highlight: color(mix(base, white, 0.93)),
+                background: color(mix(base, white, 0.90))
+            )
+        }
+        // 深色下 8 个档位的明度都往 0.1…0.2 一带收，相邻档位之间只差几个百分点；
+        // 直接照搬浅色的比例会得到一片死黑，卡片和页面底色分不出层次。
         return .init(
-            primary: color(base),
-            shade: color(mix(base, black, 0.22)),
-            tint: color(mix(base, white, 0.18)),
-            soft: color(mix(base, white, 0.50)),
-            faint: color(mix(base, white, 0.78)),
-            wash: color(mix(base, white, 0.88)),
-            highlight: color(mix(base, white, 0.93)),
-            background: color(mix(base, white, 0.90))
+            primary: color(mix(base, white, 0.06)),
+            shade: color(mix(base, white, 0.42)),
+            tint: color(mix(base, black, 0.62)),
+            soft: color(mix(base, black, 0.74)),
+            faint: color(mix(base, black, 0.82)),
+            wash: color(mix(base, black, 0.87)),
+            highlight: color(mix(base, black, 0.90)),
+            background: color(mix(base, black, 0.92))
         )
     }
 }
@@ -191,9 +212,17 @@ final class ThemeManager: ObservableObject {
     /// 拖滑杆时它每帧都变，正是上一条注释里那个问题的来源。
     @Published private(set) var revision: String = ""
 
+    /// 当前是否深色外观。
+    ///
+    /// 由「设置 → 个性化 → 外观」与系统外观共同决定：选「跟随系统」时读
+    /// NSApp.effectiveAppearance（此时 NSApp.appearance 是 nil，拿到的就是系统的）。
+    @Published private(set) var isDark: Bool = false
+
     private var revisionCounter: Int = 0
     private var settleWorkItem: DispatchWorkItem?
     private var resetFlagWorkItem: DispatchWorkItem?
+    /// 系统外观变化（用户在系统设置里切深浅色）的观察者。
+    private var appearanceObservation: NSKeyValueObservation?
 
     private init() {
         let config: LauncherConfig = .shared
@@ -202,9 +231,100 @@ final class ThemeManager: ObservableObject {
         customSaturation = config.themeSaturation
         customBrightness = config.themeBrightness
         revision = config.theme.rawValue + "-0"
+        // 先把 NSApp.appearance 设成配置要求的那一档，再解析"当前是不是深色"：
+        // 顺序反了的话，「跟随系统」会读到上一次强制出来的外观。
+        Self.applyAppearance(config.appearanceMode)
+        let dark: Bool = Self.resolveIsDark(config.appearanceMode)
+        isDark = dark
         palette = ThemePaletteBuilder.palette(
-            from: ThemePaletteBuilder.rgb(fromHex: config.theme.baseHex ?? 0xF14710)
+            from: ThemePaletteBuilder.rgb(fromHex: config.theme.baseHex ?? 0xF14710),
+            isDark: dark
         )
+        // 系统外观变化时重新解析。
+        //
+        // 两条来源都挂上：effectiveAppearance 的 KVO 在「跟随系统」时最直接；
+        // AppleInterfaceThemeChangedNotification 是系统切换深浅色时一定会发的通知，
+        // 某些系统版本上 KVO 不触发，靠它兜住。回调可能来自任意线程，统一跳回主线程。
+        appearanceObservation = NSApplication.shared.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.refreshDarkFromSystem()
+            }
+        }
+        _ = DistributedNotificationCenter.default.addObserver(
+            forName: .init("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshDarkFromSystem()
+        }
+    }
+
+    /// 把配置里的外观模式落到 NSApp 上。
+    ///
+    /// 「跟随系统」要设成 nil，而不是去读当前系统再固定下来：nil 才会继续跟随，
+    /// 用户之后在系统设置里切换也能收到变化。
+    static func applyAppearance(_ mode: AppearanceMode) {
+        switch mode {
+        case .system:
+            NSApplication.shared.appearance = nil
+        case .light:
+            NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        case .dark:
+            NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+
+    private static func resolveIsDark(_ mode: AppearanceMode) -> Bool {
+        switch mode {
+        case .light: return false
+        case .dark: return true
+        case .system:
+            let match: NSAppearance.Name? = NSApplication.shared.effectiveAppearance
+                .bestMatch(from: [.aqua, .darkAqua])
+            return match == .darkAqua
+        }
+    }
+
+    /// 切换外观模式（设置页调用）。
+    func set(appearance mode: AppearanceMode) {
+        guard mode != LauncherConfig.shared.appearanceMode else { return }
+        LauncherConfig.shared.appearanceMode = mode
+        Self.applyAppearance(mode)
+        let dark: Bool = Self.resolveIsDark(mode)
+        guard dark != isDark else { return }
+        isDark = dark
+        rebuildPalette()
+        // 与切主题同理：静态颜色是计算属性，重建视图树才会整体换色。
+        cancelPendingSettle()
+        isAdjustingCustomTheme = false
+        bumpRevision("appearance")
+        log("外观已切换为 \(mode.description)")
+    }
+
+    /// 启动时把外观落到 NSApp 上（AppDelegate 调用）。
+    ///
+    /// init 里已经做过一次；这里再显式来一遍是因为 AppDelegate 的调用顺序早于
+    /// 任何视图构建，放在这里能保证「窗口出现之前」NSApp.appearance 已经正确。
+    func installAppearance() {
+        let mode: AppearanceMode = LauncherConfig.shared.appearanceMode
+        Self.applyAppearance(mode)
+        let dark: Bool = Self.resolveIsDark(mode)
+        guard dark != isDark else { return }
+        isDark = dark
+        rebuildPalette()
+    }
+
+    /// 系统外观变了：只有「跟随系统」时才需要动。
+    private func refreshDarkFromSystem() {
+        guard LauncherConfig.shared.appearanceMode == .system else { return }
+        let dark: Bool = Self.resolveIsDark(.system)
+        guard dark != isDark else { return }
+        isDark = dark
+        rebuildPalette()
+        cancelPendingSettle()
+        isAdjustingCustomTheme = false
+        bumpRevision("appearance")
+        log("跟随系统切换外观：\(dark ? "深色" : "浅色")")
     }
 
     /// 当前色板。所有 Color.colorN 都从这里取。
@@ -223,9 +343,12 @@ final class ThemeManager: ObservableObject {
                 saturation: customSaturation,
                 brightness: customBrightness
             )
-            palette = ThemePaletteBuilder.palette(from: rgb)
+            palette = ThemePaletteBuilder.palette(from: rgb, isDark: isDark)
         } else {
-            palette = ThemePaletteBuilder.palette(from: ThemePaletteBuilder.rgb(fromHex: current.baseHex ?? 0xF14710))
+            palette = ThemePaletteBuilder.palette(
+                from: ThemePaletteBuilder.rgb(fromHex: current.baseHex ?? 0xF14710),
+                isDark: isDark
+            )
         }
     }
 
@@ -246,7 +369,8 @@ final class ThemeManager: ObservableObject {
             return cached
         }
         let built: ThemePalette = ThemePaletteBuilder.palette(
-            from: ThemePaletteBuilder.rgb(fromHex: theme.baseHex ?? 0xF14710)
+            from: ThemePaletteBuilder.rgb(fromHex: theme.baseHex ?? 0xF14710),
+            isDark: isDark
         )
         presetPaletteCache[theme] = built
         return built

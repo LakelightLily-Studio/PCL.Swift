@@ -13,55 +13,32 @@ import Core
 
 struct ChangelogHomepageView: View {
     @State private var document: ChangelogDocument?
-    @State private var source: Source = .none
     @State private var errorMessage: String?
     @State private var refreshing: Bool = false
 
-    /// 当前内容的来源，显示在卡片上方。
-    private enum Source {
-        case none, bundled, cache, remote
-
-        var description: String {
-            switch self {
-            case .none: ""
-            case .bundled: "更新日志来自 App 内置副本"
-            case .cache: "更新日志来自上次的缓存"
-            case .remote: "更新日志来自国内分发仓库"
-            }
-        }
-    }
-
     var body: some View {
         CardContainer {
-            header
-
             if let document {
                 ForEach(Array(document.entries.enumerated()), id: \.element.id) { index, entry in
                     card(entry)
                         .cardIndex(index)
                 }
             } else if let errorMessage {
-                MyTip(text: errorMessage, theme: .red)
+                // 加载失败时给一个重试入口：顶栏（来源 + 刷新）已经去掉了，
+                // 没有它就只能切页再回来。
+                VStack(alignment: .leading, spacing: 10) {
+                    MyTip(text: errorMessage, theme: .red)
+                    MyButton("重试", disabled: refreshing) {
+                        Task { await refresh() }
+                    }
+                    .frame(width: 90)
+                }
             } else {
                 MyText("正在加载更新日志…", color: .colorGray3)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .task { await load() }
-    }
-
-    // MARK: - 顶栏
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            MyText(source.description, size: 12, color: .colorGray3)
-                .lineLimit(1)
-            Spacer(minLength: 0)
-            MyButton("刷新", disabled: refreshing) {
-                Task { await refresh() }
-            }
-            .frame(width: 90)
-        }
     }
 
     // MARK: - 卡片
@@ -85,11 +62,15 @@ struct ChangelogHomepageView: View {
     private func sectionView(_ section: ChangelogSection) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if !section.title.isEmpty {
-                MyText(section.title, size: 12, color: .colorGray3)
+                // 小节标题用主题色的大字与正文拉开层次：原来是 12pt 灰字，压在正文里分不出层级。
+                Text(section.title)
+                    .font(.custom("PingFangSC-Semibold", size: 15))
+                    .foregroundStyle(Color.color3)
+                    .padding(.top, 2)
             }
             ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .top, spacing: 6) {
-                    MyText("·", size: 13, color: .colorGray3)
+                    MyText("·", size: 14, color: .colorGray3)
                     itemText(item)
                 }
             }
@@ -106,7 +87,7 @@ struct ChangelogHomepageView: View {
             text = text + piece
         }
         return text
-            .font(.custom("PCLEnglish", size: 13))
+            .font(.custom("PCLEnglish", size: 14))
             .foregroundStyle(Color.color1)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -117,10 +98,8 @@ struct ChangelogHomepageView: View {
         // 先用手里已有的内容铺满页面，再去联网：断网时也不会先闪一下"加载失败"。
         if let cached = ChangelogLoader.loadCached() {
             document = cached
-            source = .cache
         } else if let bundled = ChangelogLoader.loadBundled() {
             document = bundled
-            source = .bundled
         }
         await refresh()
     }
@@ -131,7 +110,6 @@ struct ChangelogHomepageView: View {
         defer { refreshing = false }
         do {
             document = try await ChangelogLoader.loadRemote()
-            source = .remote
             errorMessage = nil
         } catch let error where error.isCancellationError {
         } catch {

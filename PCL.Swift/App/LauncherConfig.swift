@@ -131,6 +131,11 @@ class LauncherConfig: Codable {
         didSet { LauncherConfig.markDirty() }
     }
 
+    /// 深浅色外观：跟随系统 / 强制浅色 / 强制深色。
+    public var appearanceMode: AppearanceMode = .system {
+        didSet { LauncherConfig.markDirty() }
+    }
+
     // MARK: - 下载
 
     /// 下载使用的最大并发数。nil 表示跟随下载源推荐值。
@@ -199,6 +204,13 @@ class LauncherConfig: Codable {
 
     /// 导航栏（标题栏）背景样式：纯色或主题色 + 线格。
     public var navigationBarBackground: NavigationBarBackground = .theme {
+        didSet { LauncherConfig.markDirty() }
+    }
+    /// 「液态玻璃」这一档的模糊程度（0…100）。
+    ///
+    /// 系统材质的模糊半径本身不可调，所以这里映射成「材质档位 + 雾化罩」：
+    /// 0 最清透（背后的画面几乎原样透出来），100 最糊（像一层厚磨砂）。
+    public var navigationBarBlur: Int = 60 {
         didSet { LauncherConfig.markDirty() }
     }
     /// 标题栏 Logo 类型。
@@ -369,6 +381,7 @@ class LauncherConfig: Codable {
         self.themeHue = try container.decodeIfPresent(Double.self, forKey: .themeHue) ?? 0.04
         self.themeSaturation = try container.decodeIfPresent(Double.self, forKey: .themeSaturation) ?? 0.93
         self.themeBrightness = try container.decodeIfPresent(Double.self, forKey: .themeBrightness) ?? 0.95
+        self.appearanceMode = (try? container.decodeIfPresent(AppearanceMode.self, forKey: .appearanceMode)) ?? .system
 
         self.downloadMaxThreads = try container.decodeIfPresent(Int.self, forKey: .downloadMaxThreads)
         self.downloadSpeedLimit = try container.decodeIfPresent(Int.self, forKey: .downloadSpeedLimit) ?? 0
@@ -384,6 +397,7 @@ class LauncherConfig: Codable {
         self.resourceTitleStyle = (try? container.decodeIfPresent(ResourceTitleStyle.self, forKey: .resourceTitleStyle)) ?? .nameFirst
 
         self.navigationBarBackground = (try? container.decodeIfPresent(NavigationBarBackground.self, forKey: .navigationBarBackground)) ?? .theme
+        self.navigationBarBlur = try container.decodeIfPresent(Int.self, forKey: .navigationBarBlur) ?? 60
         self.titleBarLogoType = (try? container.decodeIfPresent(TitleBarLogoType.self, forKey: .titleBarLogoType)) ?? .logo
         self.titleBarText = try container.decodeIfPresent(String.self, forKey: .titleBarText) ?? "PCL.Swift"
         self.titleBarImageURL = try container.decodeIfPresent(URL.self, forKey: .titleBarImageURL)
@@ -434,6 +448,7 @@ class LauncherConfig: Codable {
         try container.encode(themeHue, forKey: .themeHue)
         try container.encode(themeSaturation, forKey: .themeSaturation)
         try container.encode(themeBrightness, forKey: .themeBrightness)
+        try container.encode(appearanceMode, forKey: .appearanceMode)
 
         try container.encodeIfPresent(downloadMaxThreads, forKey: .downloadMaxThreads)
         try container.encode(downloadSpeedLimit, forKey: .downloadSpeedLimit)
@@ -448,6 +463,7 @@ class LauncherConfig: Codable {
         try container.encode(resourceTitleStyle, forKey: .resourceTitleStyle)
 
         try container.encode(navigationBarBackground, forKey: .navigationBarBackground)
+        try container.encode(navigationBarBlur, forKey: .navigationBarBlur)
         try container.encode(titleBarLogoType, forKey: .titleBarLogoType)
         try container.encode(titleBarText, forKey: .titleBarText)
         try container.encodeIfPresent(titleBarImageURL, forKey: .titleBarImageURL)
@@ -534,6 +550,7 @@ class LauncherConfig: Codable {
         case themeHue
         case themeSaturation
         case themeBrightness
+        case appearanceMode
         case downloadMaxThreads
         case downloadSpeedLimit
         case autoSetGameLanguage
@@ -546,6 +563,7 @@ class LauncherConfig: Codable {
         case resourceFileNameFormat
         case resourceTitleStyle
         case navigationBarBackground
+        case navigationBarBlur
         case titleBarLogoType
         case titleBarText
         case titleBarImageURL
@@ -623,17 +641,42 @@ class LauncherConfig: Codable {
     }
 }
 
+/// 深浅色外观。
+///
+/// 与主题色是两个维度：主题色决定强调色，外观决定底色与文字色的明暗。
+/// 默认「跟随系统」，跟 PCL.Mac 的处理一致——它也是把外观交给系统，再按解析结果换色板。
+public enum AppearanceMode: String, Codable, CaseIterable, CustomStringConvertible {
+    /// 跟随系统的「外观」设置。
+    case system
+    /// 强制浅色。
+    case light
+    /// 强制深色。
+    case dark
+
+    public var description: String {
+        switch self {
+        case .system: "跟随系统"
+        case .light: "浅色"
+        case .dark: "深色"
+        }
+    }
+}
+
 /// 导航栏（标题栏）背景样式。
 public enum NavigationBarBackground: String, Codable, CaseIterable, CustomStringConvertible {
     /// 纯主题色。
     case theme
     /// 主题色 + 白色线格。
     case lines
+    /// 液态玻璃：标题栏换成玻璃材质，系统不支持时退回 macOS 原生的模糊。
+    case liquidGlass
 
     public var description: String {
         switch self {
         case .theme: "纯色"
         case .lines: "线格"
+        // 还在打磨：模糊程度、深浅色下的对比度都可能会变，先标个 Beta。
+        case .liquidGlass: "液态玻璃 Beta"
         }
     }
 }

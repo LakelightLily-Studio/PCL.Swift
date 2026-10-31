@@ -45,6 +45,20 @@ class InstanceOverviewViewModel: ObservableObject {
         instance.modLoader?.icon ?? .iconGrassBlock
     }
 
+    /// 「默认」那一格的图标：按加载器推导，没有加载器就是草方块。
+    public var automaticIcon: InstanceIcon {
+        if let modLoader = instance.modLoader { return .loader(modLoader) }
+        return .fallback
+    }
+
+    /// 当前选中的预设图标 id；用户自己选的图片没有 id，为 nil。
+    public var selectedIconID: String? { instance.customIconName }
+
+    /// 当前图标是不是用户自己选的图片。
+    public var isCustomIconSelected: Bool {
+        instance.customIconURL != nil && instance.customIconName == nil
+    }
+
     public init(instanceManager: InstanceManager, id: String) {
         self.instanceManager = instanceManager
         let instance: MinecraftInstance = instanceManager.currentRepository.instance(named: id)!
@@ -176,7 +190,40 @@ class InstanceOverviewViewModel: ObservableObject {
             }
             try FileManager.default.copyItem(at: url, to: destination)
             instance.customIconURL = destination
+            // 用户自己选的图片没有预设 id，选择器里据此高亮「自定义…」那一格。
+            instance.customIconName = nil
             // markDirty 会广播 objectWillChange，所有观察该实例的页面一起刷新。
+            instance.markDirty()
+            save()
+            iconImage = Self.loadIcon(for: instance)
+            hint("图标已更新！", type: .finish)
+        } catch {
+            err("设置实例图标失败：\(error.localizedDescription)")
+            hint("设置实例图标失败：\(error.localizedDescription)", type: .critical)
+        }
+    }
+
+    /// 应用一个预设图标（选择器里的那些方块 / 物品）。
+    ///
+    /// 与自定义图片同一条路：图**复制**进实例目录存成 .clicon.png，
+    /// 额外记一个 customIconName，只用于在选择器里标出当前是哪一格。
+    func setIcon(_ icon: InstancePresetIcon) async {
+        guard let image = await InstanceIconStore.shared.imageForSaving(icon),
+              let data = Self.pngData(of: image) else {
+            hint("图标加载失败，请检查网络后重试。", type: .critical)
+            return
+        }
+        let destination: URL = instance.url.appending(path: ".clicon.png")
+        do {
+            if let old = instance.customIconURL, old != destination {
+                try? FileManager.default.removeItem(at: old)
+            }
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try data.write(to: destination)
+            instance.customIconURL = destination
+            instance.customIconName = icon.id
             instance.markDirty()
             save()
             iconImage = Self.loadIcon(for: instance)
@@ -197,6 +244,7 @@ class InstanceOverviewViewModel: ObservableObject {
             }
         }
         instance.customIconURL = nil
+        instance.customIconName = nil
         instance.markDirty()
         save()
         iconImage = Self.loadIcon(for: instance)
@@ -237,5 +285,12 @@ class InstanceOverviewViewModel: ObservableObject {
     private static func loadIcon(for instance: MinecraftInstance) -> NSImage? {
         guard let url = instance.customIconURL else { return nil }
         return NSImage(contentsOf: url)
+    }
+
+    /// 把内存里的图转成 PNG 数据：写进实例目录的那份要是真实文件，不能只存内存。
+    private static func pngData(of image: NSImage) -> Data? {
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
     }
 }

@@ -22,18 +22,37 @@ extension Color {
     static var color8: Color { ThemeManager.shared.palette.highlight }
     static var colorBg0: Color { ThemeManager.shared.palette.soft }
     static var colorBg1: Color { ThemeManager.shared.palette.wash.opacity(0.75) }
-    static let color1: Color = .init(0x343d4a)
-    static let colorGray1: Color = .init(0x404040)
-    static let colorGray2: Color = .init(0x737373)
-    static let colorGray3: Color = .init(0x8c8c8c)
-    static let colorGray4: Color = .init(0xa6a6a6)
-    static let colorGray5: Color = .init(0xcccccc)
-    static let colorGray6: Color = .init(0xebebeb)
-    static let colorGray7: Color = .init(0xf0f0f0)
-    static let colorGray8: Color = .init(0xf5f5f5)
 
-    /// 窗口底色，随主题变化。
+    // 中性色：浅色下是"深字浅底"，深色下整体翻过来（文字变亮、灰阶变暗）。
+    // 它们是计算属性而不是常量——外观切换后视图重建时会重新取值，
+    // 常量则会被静态初始化时的那一套颜色钉死。
+    /// 主文字色。
+    static var color1: Color { isDark ? .init(0xE6E8EC) : .init(0x343d4a) }
+    static var colorGray1: Color { isDark ? .init(0xD6D6D6) : .init(0x404040) }
+    static var colorGray2: Color { isDark ? .init(0xA8A8A8) : .init(0x737373) }
+    static var colorGray3: Color { isDark ? .init(0x8C8C8C) : .init(0x8c8c8c) }
+    static var colorGray4: Color { isDark ? .init(0x6E6E6E) : .init(0xa6a6a6) }
+    static var colorGray5: Color { isDark ? .init(0x4A4A4A) : .init(0xcccccc) }
+    static var colorGray6: Color { isDark ? .init(0x333333) : .init(0xebebeb) }
+    static var colorGray7: Color { isDark ? .init(0x262626) : .init(0xf0f0f0) }
+    static var colorGray8: Color { isDark ? .init(0x1B1B1B) : .init(0xf5f5f5) }
+
+    /// 窗口底色，随主题与深浅色变化。
     static var colorBackground: Color { ThemeManager.shared.palette.background }
+
+    /// 卡片 / 弹窗 / 下拉面板的底色。
+    ///
+    /// 浅色沿用 PCL2 的 Color.FromArgb(245,255,255,255)（近白，不是灰）；
+    /// 深色用比页面底色亮一档的深灰，卡片才能从背景里浮出来。
+    static var cardBackground: Color {
+        isDark ? .init(0x2A2C31).opacity(0.97) : .white.opacity(245.0 / 255.0)
+    }
+
+    /// 侧边栏底板。
+    static var sidebarBackground: Color { isDark ? .init(0x202226) : .white }
+
+    /// 当前是不是深色外观。
+    static var isDark: Bool { ThemeManager.shared.isDark }
 
     init(_ hex: UInt, alpha: Double = 1.0) {
         self.init(

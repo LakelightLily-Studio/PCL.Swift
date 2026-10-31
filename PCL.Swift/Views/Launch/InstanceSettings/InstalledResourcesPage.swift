@@ -26,16 +26,20 @@ struct InstalledResourcesPage: View {
                 unsupportedCard
             } else {
                 CardContainer {
+                    // 页面级控件按视觉顺序编号：类型选择卡 → 提示条 → 工具栏卡 → 资源列表。
                     typeSelectorCard
+                        .cardIndex(0)
 
                     if viewModel.type == .shader {
                         MyTip(text: "光影包需要搭配光影加载器使用。\n详细教程：https://cylorine.studio/helps/shader", theme: .blue)
+                            .cardIndex(1)
                             .onTapGesture {
                                 NSWorkspace.shared.open(URL(string: "https://cylorine.studio/helps/shader")!)
                             }
                     }
                     if viewModel.type == .datapack {
                         MyTip(text: "数据包安装在各个存档的 datapacks 目录下，需要先在「下载 → 数据包」里选存档安装。这里列出的是当前实例所有存档里的数据包。", theme: .yellow)
+                            .cardIndex(1)
                     }
 
                     MySearchBox(placeholder: "搜索\(viewModel.type.localizedName)") { keyword in
@@ -43,7 +47,7 @@ struct InstalledResourcesPage: View {
                     }
 
                     toolbarCard
-                        .cardIndex(1)
+                        .cardIndex(2)
 
                     if let resources = viewModel.resources, !resources.isEmpty {
                         PaginatedContainer(currentPage: $viewModel.currentPage, pageCount: viewModel.pageCount) { currentPage in
@@ -54,6 +58,7 @@ struct InstalledResourcesPage: View {
                                     }
                                 }
                             }
+                            .cardIndex(3)
                             .onChange(of: currentPage) { _ in
                                 viewModel.updateResources()
                             }

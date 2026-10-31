@@ -44,6 +44,8 @@ struct StaticCard<Content: View>: View {
             }
 
             content()
+                // 与 MyCard 一致：卡片内容里的提示条跟着卡片动，不单独播动画。
+                .environment(\.isInsideCard, true)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(EdgeInsets(top: title == nil ? padding : 0, leading: padding, bottom: padding, trailing: padding))
         }
@@ -51,7 +53,7 @@ struct StaticCard<Content: View>: View {
         .background {
             RoundedRectangle(cornerRadius: 5)
                 // 与 MyCard 一致：PCL2 的卡片底色是 245 alpha 的近白。
-                .fill(Color.white.opacity(245.0 / 255.0))
+                .fill(Color.cardBackground)
                 .shadow(color: Color.color1.opacity(0.07), radius: 3)
         }
         .modifier(PageEntranceShape(progress: appeared ? 1 : 0, enabled: !disableCardAppearAnimation))

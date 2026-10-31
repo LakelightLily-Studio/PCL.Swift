@@ -25,6 +25,10 @@ struct PersonalizationSettingsPage: View {
     @State private var backgroundOpacity: Double = Double(LauncherConfig.shared.backgroundImageOpacity)
     @State private var backgroundBlur: Double = Double(LauncherConfig.shared.backgroundImageBlur)
     @State private var colorfulBackground: Bool = LauncherConfig.shared.backgroundColorful
+    /// 当前外观模式。改动立刻交给 ThemeManager：它负责换色板、换 NSApp.appearance 并重建视图树。
+    @State private var appearanceMode: AppearanceMode = LauncherConfig.shared.appearanceMode
+    /// 标题栏「液态玻璃」的模糊程度（0…100）。
+    @State private var navigationBarBlur: Int = LauncherConfig.shared.navigationBarBlur
 
     var body: some View {
         CardContainer {
@@ -51,6 +55,16 @@ struct PersonalizationSettingsPage: View {
     private var basicCard: some View {
         MyCard("基础", foldable: false) {
             VStack(alignment: .leading, spacing: 10) {
+                // 外观：跟随系统 / 浅色 / 深色。与主题色是两个维度，放在主题上面。
+                SettingRow("外观", labelWidth: 120, verticalPadding: 2) {
+                    HStack(spacing: 26) {
+                        ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                            MyRadioBox(checked: appearanceBinding(mode), text: mode.description)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+
                 SettingRow("主题", labelWidth: 120, verticalPadding: 2) {
                     // 与 PCL2 一致：五列单选，名字逐行排开，不做成下拉。
                     LazyVGrid(
@@ -215,6 +229,26 @@ struct PersonalizationSettingsPage: View {
                     .frame(maxWidth: .infinity)
                 }
 
+                // 模糊程度只对「液态玻璃」有意义，其余两档是实心底色，拖动条没有作用。
+                if LauncherConfig.shared.navigationBarBackground == .liquidGlass {
+                    SettingRow("模糊程度", labelWidth: 120) {
+                        HStack(spacing: 12) {
+                            MySlider(value: Binding(
+                                get: { Double(navigationBarBlur) },
+                                set: { value in
+                                    let newValue: Int = Int(value.rounded())
+                                    guard newValue != navigationBarBlur else { return }
+                                    navigationBarBlur = newValue
+                                    LauncherConfig.shared.navigationBarBlur = newValue
+                                    config.touch()
+                                }
+                            ), range: 0...100, step: 1)
+                            MyText("\(navigationBarBlur)%", size: 12, color: .colorGray3)
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                    }
+                }
+
                 // 原版是 1*、1*、1*、1*、0.2* 五列：四项均分，右边留一点空白。
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .leading), count: 5),
@@ -322,6 +356,18 @@ struct PersonalizationSettingsPage: View {
     // MARK: - 交互
 
     /// 主题单选。选中值直接落到 ThemeManager：它会一并写回 LauncherConfig 并刷新色板。
+    /// 外观三项单选。与主题同理：点自己就切换，取消选中不做任何事。
+    private func appearanceBinding(_ mode: AppearanceMode) -> Binding<Bool> {
+        .init(
+            get: { appearanceMode == mode },
+            set: { checked in
+                guard checked else { return }
+                appearanceMode = mode
+                themeManager.set(appearance: mode)
+            }
+        )
+    }
+
     private func themeBinding(_ theme: Theme) -> Binding<Bool> {
         .init(
             get: { themeManager.current == theme },

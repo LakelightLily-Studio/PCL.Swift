@@ -21,33 +21,41 @@ struct InstanceListSidebar: Sidebar {
     }
     
     let width: CGFloat = 300
+
+    /// 入场 / 退场错峰的控件总数：两个灰色小标题 + 目录条目。
+    private var controlCount: Int {
+        instanceVM.repositories.isEmpty ? 1 : instanceVM.repositories.count + 2
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !instanceVM.repositories.isEmpty {
-                MyText("目录列表", size: 12, color: .colorGray3)
-                    .padding(.leading, 13)
+                SidebarSectionTitle("目录列表", color: .colorGray3, index: 0, exitCount: controlCount)
                     .padding(.top, 18)
                 MyNavigationList(
                     routeList: instanceVM.repositories.map {
                         .init(AppRoute.instanceList(repositoryId: $0.id), nil, $0.name)
-                    } + [.init(AppRoute.dshInstanceList, nil, "DSH")]
+                    },
+                    indexOffset: 1,
+                    exitCount: controlCount
                 ) { route in
                     switch route {
                     case .instanceList(let repositoryId):
                         guard case .instanceList(let currentRepositoryId) = AppRouter.shared.last,
                               repositoryId == currentRepositoryId else { return }
-                        // 点 Minecraft 目录即视为离开 DSH，启动页按钮随之还原。
-                        DSHSelection.shared.leave()
                         instanceVM.reload(repository: instanceVM.currentRepository)
                     default:
                         return
                     }
                 }
             }
-            MyText("添加或导入", size: 12, color: .colorGray3)
-                .padding(.leading, 13)
-                .padding(.top, 18)
+            SidebarSectionTitle(
+                "添加或导入",
+                color: .colorGray3,
+                index: instanceVM.repositories.isEmpty ? 0 : instanceVM.repositories.count + 1,
+                exitCount: controlCount
+            )
+            .padding(.top, 18)
             VStack(spacing: 0) {
                 ImportButton(.iconAdd, "添加已有目录", perform: requestAddRepository)
                 ImportButton(.iconImportModpack, "导入整合包", perform: onImportModpackClicked)

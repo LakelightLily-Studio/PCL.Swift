@@ -171,7 +171,7 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
   视图侧改尺寸会被 `minSize == maxSize` 顶回去。
 - 更新检查（`UpdateService.runInteractiveUpdateFlow`）依赖 `ContentView` 里的弹窗层，只在进入 `.launcher` 后发起；
   欢迎弹窗同理，只在 `.launcher` 阶段显示。
-- **demo 与 main 只差演示功能**，其余（首启流程、DSH、窗口修复等）两边必须一致。demo 额外带的只有：
+- **demo 与 main 只差演示功能**，其余（首启流程、窗口修复等）两边必须一致。demo 额外带的只有：
   `DemoState`（⌘R 重播开场 + 1–4 切顶栏页）、`DemoResourceCatalog`（资源列表读打包快照）、
   `Resources/demo/` 图标，以及它们依赖的三处改动（`ModrinthAPIClient.SearchResponse` 的公开 init、
   `ResourcesSearchViewModel` 换数据源、`NetworkImage` 支持 `file://`）。
@@ -197,9 +197,30 @@ Xcode UI 里选工具链能起来，是因为 GUI 走的是另一条解析路径
   不要改成每帧随机（否则同一场动画会抖动）。
 - 向导背景是固定 64pt 线距的无限纯网格（只有横竖线，没有对角线），实现在
   `Views/Startup/WizardGridBackground.swift`；不要改回 5×5 固定分割或对角线，否则窗口变大时会被拉稀。
-- 导航栏背景有「纯色 / 线格」两种，存在 `LauncherConfig.navigationBarBackground`，由
+- 导航栏背景有「纯色 / 线格 / 液态玻璃」三种，存在 `LauncherConfig.navigationBarBackground`，由
   `Components/NavigationBarBackgroundView.swift` 统一绘制，向导顶栏与启动器顶栏共用；
   「线格」是主题色底 + 白色网格。
+  「液态玻璃」在 `Components/LiquidGlassView.swift`：macOS 26 起用 `NSGlassEffectView`
+  （真正的 Liquid Glass），更低版本退回 `NSVisualEffectView` 的 `.headerView` + `.behindWindow`
+  （系统原生的那层模糊）。**两档都不掺主题色**（`tintColor = nil`）：掺了就是一块带渐变的纯色板，
+  不是玻璃；FlClash 那类实现也是这个观感。下面三条缺一条，玻璃就会「还是原主题色」：
+  1. 这一档挂载时把宿主窗口改成 `isOpaque = false` + 清空底色（视图移出视图树时恢复）。
+     **不要**改成常驻——窗口长期不透明时，玻璃只会渲染成一块纯色；
+  2. 页面底色（`ContentView` 的 `.background(colorBackground / colorGray8)`）**只铺内容区**，
+     不铺到标题栏下面：玻璃采样的是它背后那层内容，底色铺过去就永远是主题色；
+  3. 玻璃是浅色的，标题栏前景色要跟着换深色（`TitleBarView.barForeground`，以及 `PageButton` /
+     `WindowButton` 里的 `isGlassBar`），白字在浅玻璃上会糊掉。
+  「模糊程度」滑块（`LauncherConfig.navigationBarBlur`，0…100）**不是真的半径**：
+  NSVisualEffectView / NSGlassEffectView 都没有暴露模糊半径。它由三层一起响应，缺一层就「拖了没反应」：
+  1. 材质档位（`FrostedBackdrop.material`）：`.underPageBackground` / `.underWindowBackground` / `.headerView`
+     三档，这是**真正的**模糊强弱差；
+  2. 玻璃不透明度（`GlassSurface().opacity(0.25 + 0.75 * intensity)`）：低档让开、高档盖满；
+  3. 一层很淡的雾（`.windowBackgroundColor`，0.10…0.24）兜住最低档的对比度。
+  **雾化层必须叠在玻璃之上**：NSGlassEffectView 采样的是窗口背后的画面，不会把叠在它下面的
+  兄弟视图混进去——早先把雾放在玻璃下面，滑块拖到底也毫无变化（`调了没用` 就是它）。
+  想换成真正的半径只能自己渲染窗口背后的画面，那要屏幕录制权限，不值得。
+  深色外观下，标题栏**选中**页签的文字用 `.color3`，与左侧边栏选中项同一套颜色；
+  浅色仍用更深的 `.color2`（白底药丸上 color3 偏浅）。
 - 窗口的 `contentView` 是普通 `NSView` 包着 `NSHostingView`（`sizingOptions = []`）：直接把 hosting view
   当 contentView 时，SwiftUI 的理想尺寸会顶穿窗口（向导的 ScrollView 曾把窗口撑到 1361pt）。
 
@@ -276,7 +297,7 @@ LauncherVisibility.resolve(instance:) 在 Core 里，因为启动器窗口那一
 
 ## 实例元数据的存放
 
-displayName / customIconURL / customDescription / isFavorite / category
+displayName / customIconURL / customIconName / customDescription / isFavorite / category
 写在实例目录的 .clmetadata.json 里，与 uuid、version 同文件。
 
 - **不改文件夹名**：name 同时是目录名、清单文件名与启动参数 version_name 的来源，
@@ -285,6 +306,9 @@ displayName / customIconURL / customDescription / isFavorite / category
   不能因此让整份元数据解码失败。
 - 自定义图标会**复制**进实例目录（.clicon.png），不记住外部路径——
   外部文件随时会被删，记住路径等于让图标在某个时刻静默消失。
+- `customIconName` 是「图标选择器里选中了哪一个预设」（见 `InstanceIconCatalog`），
+  只用来高亮那一格；用户自己选的图片没有 id，为 nil。它**不**参与图标显示——
+  显示的永远是 `customIconURL` 指向的那个文件。
 
 ## 主题系统
 
@@ -297,6 +321,26 @@ Theme 只给「基色」，其余 7 档由 ThemePaletteBuilder 按固定比例�
 - 自定义主题存 HSB 三值（themeHue / themeSaturation / themeBrightness），
   视图树的重建标识是 ThemeManager.revision（含三值），
   只拿主题名当 id 的话拖滑杆不会刷新。
+
+### 深浅色外观
+
+外观与主题色是**两个维度**：主题色决定强调色，外观决定底色与文字色的明暗。
+设置 → 个性化 → 基础 里的「外观」三选一（跟随系统 / 浅色 / 深色），存在 `LauncherConfig.appearanceMode`。
+
+- 落盘到 AppKit 只有一处：`ThemeManager.applyAppearance(_:)`——
+  「跟随系统」必须设 `NSApp.appearance = nil`，**不要**先读系统当前值再固定下来，否则系统切换后不再跟随。
+  启动时由 `AppDelegate` 调 `ThemeManager.shared.installAppearance()`。
+  （原来这里硬编码 `.aqua`，深色与跟随系统都会被按死成浅色。）
+- 深色不是「把浅色调暗」：`ThemePaletteBuilder.palette(from:isDark:)` 在深色下把 8 个档位
+  反过来往黑里混（tint → background 越走越深），强调色 primary / shade 反而要**提亮**，
+  否则压在深底上根本看不见。
+- 中性色 `color1` / `colorGray1…8` 是**计算属性**，按 `Color.isDark` 翻明暗；
+  **不要**改回 `static let`——常量会在静态初始化时被钉死，切外观后不跟着变。
+- 表面色统一走 `Color.cardBackground`（卡片 / 弹窗 / 下拉面板）与 `Color.sidebarBackground`（侧边栏底板）。
+  **新代码不要写 `Color.white`**：浅色下它恰好等于卡片色，深色下就是一块刺眼的白。
+- 提示条（MyTip）的浅底深字在深色下要整块翻过来，见 `MyTip.Theme.backgroundColor` 的 `Color.isDark` 分支。
+- 切换外观会 bump revision（与切主题同一条路），整棵视图树重建一次；系统外观变化由
+  effectiveAppearance 的 KVO + `AppleInterfaceThemeChangedNotification` 双保险监听，只在「跟随系统」时生效。
 
 ## 背景图片
 
@@ -339,6 +383,11 @@ Theme 只给「基色」，其余 7 档由 ThemePaletteBuilder 按固定比例�
   否则整页会同时出现（全页 index 都是 0 = 同时入场）。
   注意 PCL2 的错峰单位是"页面级控件"（卡片 / 提示条 / 按钮各算一格，卡片内部不再遍历），
   不是卡片内部每个文字；所以 25ms 的步长就是原值。
+- **提示条（MyTip）也是页面级控件**：PCL2 的 MyHint 和卡片在同一条时间线上统一编号，
+  所以 `MyTip` 与 MyCard 用同一套 `PageEntranceShape` / `ControlExitShape`，靠 `.cardIndex(n)` 错峰。
+  新页面里只要有一张页面级提示条，它的序号也要占一格（提示条 0、第一张卡 1，依此类推）。
+  **卡片内部的提示条不播**：MyCard / StaticCard 会给内容注入 `isInsideCard`，
+  对应 PCL2 的 GetAllAnimControls 遇到 MyCard 就不再往里遍历。
 - `disableCardAppearAnimation` 仍然有效：自定义主题拖滑杆会重建整棵树，
   那种情况下不该重播入场动画。
 
@@ -407,14 +456,18 @@ PCL2 切页不是"新页面直接盖上来"：旧页面先播退场，110ms 后�
 - 入场动画分两套，**不能同时挂**：
   - 启动页 / 任务页：整块侧边栏"淡入 + 放大 0.96 → 1"（原来的那一套，
     启动页账户面板自己还有一层 `insertTransition`）。
-  - 其它页面：`MyNavigationList` 逐条目播放 `SidebarEntrance`
-    （PCL2 `MyPageLeft` 的 25px 左移 + 两段 X 补位）。每行自己持有一个 `appeared`。
+  - 其它页面：`MyNavigationList` 的条目与 `SidebarSectionTitle`（灰色小标题）共用
+    `SidebarItemAnimation` 播放入场 `SidebarEntrance`（PCL2 `MyPageLeft` 的 25px 左移 + 两段 X 补位）。
+    标题必须一起动：PCL2 的 `GetAllAnimControls` 把 TextBlock 标题和 MyListItem 放在同一个
+    StackPanel 里统一编号，标题是这条时间线上的一格。一个侧边栏里有多个列表时（下载页的
+    Minecraft / 社区资源、版本选择的目录列表 / 添加或导入）要给 `MyNavigationList` 传
+    `indexOffset` 与 `exitCount` 接着排，否则两段列表会同时从 0 开始入场。
     错峰**照抄原版的累加式** `Delay += Math.Max(15 - Id, 7) * 2`（`SidebarEntrance.delay(for:)`）：
     0 / 30 / 58 / 84 / 108 / 130 / 150 / 168 / 184 / 198 ms…
     PCL2 的 `GetAllAnimControls` 把 MyListItem 整个算作一格（图标与文字不单独计数），
     所以序号直接对应，**不要**再乘一个放大系数。
 - **点侧边栏条目切子页面时，侧边栏既不重播入场、也不播退场**（用户明确要求）：
-  - 入场：行内 `appeared` 只在侧边栏被重建时从 false 开始，同一套侧边栏内部切换保持为 1。
+  - 入场：`SidebarItemAnimation` 里的 `appeared` 只在侧边栏被重建时从 false 开始，同一套侧边栏内部切换保持为 1。
     所以 `MyNavigationList` **不要**再按切页次数给行换 `.id`——那等于每次点击都重播一遍。
     换页面族（启动 → 版本选择、下载 → 资源详情…）时 `AppSidebarView` 会换成另一个
     侧边栏类型，新实例自然播一次入场。
@@ -558,6 +611,12 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
   `changelog.md` 直接复制仓库根目录那份。只有 PCLProto 是纯 SVG——CI 在 ubuntu 上没有 SVG 转位图的工具，
   它的 PNG 预渲染后放在 `dist-assets/about/`（该目录不参与 App 构建，别把它挪进 `Resources/` 或
   `PCL.Swift/`，否则会被同步组当成资源打进包里）。
+- **实例图标**（实例设置 → 概览 → 图标）走同一套：云端 `assets/icons/<id>.png`，
+  取图逻辑在 `Managers/InstanceIconStore.swift`（内存 → 磁盘图标缓存 → `Assets.xcassets/Icons/Instance` 的兜底图 → 云端）。
+  预设目录是 `InstanceIconCatalog`：顺序 = 默认（不在表里）→ 草方块 → 其余按创造模式物品栏的分类顺序 → 模组加载器。
+  源图由 `Scripts/generate-instance-icons.py` 从官方 client.jar 的 16×16 贴图渲染（方块 2:1 等轴测，
+  顶 1.0 / 左 0.8 / 右 0.6），产物放在 `dist-assets/icons/`，发版时由 publish-dist.sh 同步。
+  **云端与打包两份都要留**：换图标不用发版，但断网时选择器不能是空的。
 
 ## 启动器更新渠道
 

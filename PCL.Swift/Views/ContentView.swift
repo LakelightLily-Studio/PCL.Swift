@@ -31,12 +31,16 @@ struct ContentView: View {
             }
             // 背景图片铺在内容区最底层（标题栏以下），与 PCL2 的 ImgBack 位置一致。
             .background { BackgroundImageView() }
+            // 页面底色：默认是主题色的浅色，「叠加彩色背景」关掉时退回中性灰（PCL2 的 #f5f5f5）。
+            //
+            // **只铺内容区，不铺标题栏**：标题栏选「液态玻璃」时，玻璃采样的是它背后那层内容，
+            // 底色一旦铺到标题栏下面，玻璃就永远是一块主题色板（看起来"还有原主题色"）。
+            // 纯色 / 线格两档的标题栏自己画底色（NavigationBarBackgroundView），不受影响。
+            .background(LauncherConfig.shared.backgroundColorful ? Color.colorBackground : Color.colorGray8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // 消息框与提示条已上移到 RootView（向导阶段也要能弹），这里只留页面内的浮层。
         .overlay { ExtraButtonsOverlay() }
-        // 页面底色：默认是主题色的浅色，「叠加彩色背景」关掉时退回中性灰（PCL2 的 #f5f5f5）。
-        .background(LauncherConfig.shared.backgroundColorful ? Color.colorBackground : Color.colorGray8)
         // 主题色是计算属性，切换后需要重建视图树才能整体换色。
         // 用 revision 而不是主题名：自定义主题拖滑杆时只有 revision 会变。
         .id(themeManager.revision)
@@ -78,7 +82,6 @@ private struct ExtraButtonsOverlay: View {
     @ObservedObject private var router: AppRouter = .shared
     @ObservedObject private var launchManager: MinecraftLaunchManager = .shared
     @ObservedObject private var taskManager: TaskManager = .shared
-    @ObservedObject private var dshManager: DSHLaunchManager = .shared
     
     var body: some View {
         VStack(spacing: 0) {
@@ -89,24 +92,18 @@ private struct ExtraButtonsOverlay: View {
                     router.append(.tasks)
                 }
             }
-            // Minecraft 与 DSH 共用这颗电源按钮，谁在跑就停谁。
-            ExtraButton(.iconPower, launchManager.isRunning || dshManager.isRunning) {
-                if dshManager.isRunning {
-                    dshManager.stop()
+            ExtraButton(.iconPower, launchManager.isRunning) {
+                launchManager.stop()
+                if launchManager.isLaunching {
+                    hint("已取消启动！", type: .finish)
                 } else {
-                    launchManager.stop()
-                    if launchManager.isLaunching {
-                        hint("已取消启动！", type: .finish)
-                    } else {
-                        hint("已关闭游戏！", type: .finish)
-                    }
+                    hint("已关闭游戏！", type: .finish)
                 }
             }
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .animation(.spring(response: 0.4), value: launchManager.isRunning)
-        .animation(.spring(response: 0.4), value: dshManager.isRunning)
         .animation(.spring(response: 0.4), value: showTasksButton)
     }
     

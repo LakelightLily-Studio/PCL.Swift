@@ -59,7 +59,7 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
             // 早先是「悬停 color7 / 平时 white.opacity(0.5)」二选一，
             // 两端的色相与透明度同时变化，过渡中间会发灰。
             RoundedRectangle(cornerRadius: 4)
-                .fill(Color.white.opacity(0.5))
+                .fill(Color.cardBackground.opacity(0.5))
                 .overlay {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.color7.opacity(hovered ? 1 : 0))
@@ -176,7 +176,7 @@ private struct PopupView<Entry: Hashable & CustomStringConvertible>: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4)
-                .fill(.white)
+                .fill(Color.cardBackground)
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

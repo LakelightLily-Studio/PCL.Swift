@@ -168,6 +168,8 @@ struct MyCard<Content: View>: View {
                 VStack {
                     content()
                 }
+                // 卡片里的提示条不单独播入场 / 退场：PCL2 的页面级动画在 MyCard 处停止递归。
+                .environment(\.isInsideCard, true)
                 .disableHoverAnimation(!appearFinished)
                 // 只有可折叠的卡片才需要测高：它要用 actualContentHeight 算
                 // 展开/折叠的目标高度。不可折叠的卡片 showContent 恒为 true，
@@ -277,7 +279,7 @@ private struct CardChrome: ViewModifier {
                     // PCL2 的卡片底色是 Color.FromArgb(245, 255, 255, 255)：
                     // 近白、不是灰色。用 colorGray8(#f5f5f5) 在偏蓝的页面底色上
                     // 会显得发灰、和背景糊在一起。
-                    .fill(Color.white.opacity(245.0 / 255.0))
+                    .fill(Color.cardBackground)
                     // 阴影参数对齐 PCL2 的 MyCard + MyDropShadow：
                     // 半径 3；静止用 ColorObject1（这里的 color1，#343d4a）+ 0.07，
                     // 悬停换成 ColorObject4（这里的 color4，主题亮色）+ 0.4。

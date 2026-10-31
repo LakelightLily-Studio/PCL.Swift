@@ -14,8 +14,6 @@ enum AppRoute: Identifiable, Hashable, Equatable {
     
     // 启动页面的子页面
     case instanceList(repositoryId: UUID), instanceSettings(id: String)
-    /// DSH 目录。与 Minecraft 仓库并列，但不参与 `versions/` 扫描。
-    case dshInstanceList
     
     // 实例设置页面的子页面
     case instanceConfig(id: String), installedResources(id: String, type: ResourceType)
@@ -57,7 +55,6 @@ class AppRouter: ObservableObject {
         switch last {
         case .tasks: "任务列表"
         case .instanceList: "实例列表"
-        case .dshInstanceList: "DSH"
         case .instanceSettings(let id), .instanceConfig(let id), .installedResources(let id, _),
              .instanceOverview(let id), .instanceExport(let id): "版本设置 - \(id)"
         case .minecraftInstallOptions(let version): "游戏安装 - \(version.id)"
@@ -71,7 +68,6 @@ class AppRouter: ObservableObject {
         switch last {
         case .tasks: true
         case .instanceList: true
-        case .dshInstanceList: true
         case .instanceSettings, .instanceConfig, .installedResources, .instanceOverview, .instanceExport: true
         case .minecraftInstallOptions: true
         case .projectInstall: true
@@ -210,8 +206,6 @@ struct AppRouterView: View {
         case .instanceList(let repositoryId):
             InstanceListPage(instanceManager: instanceManager, repositoryId: repositoryId)
                 .id(repositoryId)
-        case .dshInstanceList:
-            DSHInstanceListPage()
         case .multiplayerSub:
             MultiplayerPage()
         case .multiplayerSettings:
@@ -291,7 +285,7 @@ struct AppSidebarView: View {
     private func width(for route: AppRoute) -> CGFloat {
         switch route {
         case .launch: LaunchSidebar.widthConstant
-        case .instanceList, .dshInstanceList: InstanceListSidebar.widthConstant
+        case .instanceList: InstanceListSidebar.widthConstant
         case .instanceSettings, .instanceConfig, .installedResources,
              .instanceOverview, .instanceExport: InstanceSettingsSidebar.widthConstant
         case .minecraftDownload, .modDownload, .resourcepackDownload, .shaderpackDownload,
@@ -309,7 +303,7 @@ struct AppSidebarView: View {
             // 有背景图片时底板换成 94% 白（PCL2 的 ColorBrushBackgroundTransparentSidebar），
             // 让图片能透出来；没有图片时仍是纯白。
             Rectangle()
-                .fill(Color.white.opacity(backgroundImageManager.image == nil ? 1 : 0xF1 / 255))
+                .fill(Color.sidebarBackground.opacity(backgroundImageManager.image == nil ? 1 : 0xF1 / 255))
                 .frame(width: width)
                 .shadow(radius: 2)
                 .zIndex(10)
@@ -372,7 +366,7 @@ struct AppSidebarView: View {
         switch route {
         case .launch:
             LaunchSidebar(instanceManager: instanceManager)
-        case .instanceList, .dshInstanceList:
+        case .instanceList:
             InstanceListSidebar(instanceManager: instanceManager)
         case .instanceSettings(let id), .instanceConfig(let id), .installedResources(let id, _),
              .instanceOverview(let id), .instanceExport(let id):

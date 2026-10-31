@@ -25,6 +25,15 @@ private struct PageExitingKey: EnvironmentKey {
     public static let defaultValue: Bool = false
 }
 
+/// 当前视图是否位于卡片内容里。
+///
+/// PCL2 的 GetAllAnimControls 遇到 MyCard 就不再往里遍历：卡片是页面级控件，
+/// 卡片**内部**的提示条（MyHint / 这里的 MyTip）不单独播入场 / 退场，
+/// 跟着卡片一起动即可。MyCard / StaticCard 会给自己的内容注入 true。
+private struct InsideCardKey: EnvironmentKey {
+    public static let defaultValue: Bool = false
+}
+
 extension EnvironmentValues {
     var cardIndex: Int {
         get { self[CardIndexKey.self] }
@@ -44,6 +53,11 @@ extension EnvironmentValues {
     var pageExiting: Bool {
         get { self[PageExitingKey.self] }
         set { self[PageExitingKey.self] = newValue }
+    }
+
+    var isInsideCard: Bool {
+        get { self[InsideCardKey.self] }
+        set { self[InsideCardKey.self] = newValue }
     }
 }
 

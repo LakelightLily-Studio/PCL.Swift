@@ -31,7 +31,9 @@ public enum SettingsTransferService {
         var themeHue: Double?
         var themeSaturation: Double?
         var themeBrightness: Double?
+        var appearanceMode: String?
         var navigationBarBackground: String?
+        var navigationBarBlur: Int?
         var titleBarLogoType: String?
         var titleBarText: String?
         var backgroundImageSuit: String?
@@ -74,7 +76,9 @@ public enum SettingsTransferService {
             themeHue: config.themeHue,
             themeSaturation: config.themeSaturation,
             themeBrightness: config.themeBrightness,
+            appearanceMode: config.appearanceMode.rawValue,
             navigationBarBackground: config.navigationBarBackground.rawValue,
+            navigationBarBlur: config.navigationBarBlur,
             titleBarLogoType: config.titleBarLogoType.rawValue,
             titleBarText: config.titleBarText,
             // 背景图片本身是用户本机的文件，不跟着设置走；只导出样式参数。
@@ -137,9 +141,14 @@ public enum SettingsTransferService {
         apply(settings.themeHue) { config.themeHue = $0 }
         apply(settings.themeSaturation) { config.themeSaturation = $0 }
         apply(settings.themeBrightness) { config.themeBrightness = $0 }
+        if let raw = settings.appearanceMode, let mode = AppearanceMode(rawValue: raw) {
+            config.appearanceMode = mode
+            applied += 1
+        }
 
 
         if let raw = settings.navigationBarBackground, let value = NavigationBarBackground(rawValue: raw) { config.navigationBarBackground = value; applied += 1 }
+        apply(settings.navigationBarBlur) { config.navigationBarBlur = $0 }
         if let raw = settings.titleBarLogoType, let type = TitleBarLogoType(rawValue: raw) { config.titleBarLogoType = type; applied += 1 }
         apply(settings.titleBarText) { config.titleBarText = $0 }
 

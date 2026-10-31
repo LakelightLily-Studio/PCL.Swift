@@ -15,14 +15,27 @@ import SwiftUI
 struct MyNavigationList: View {
     @ObservedObject private var router: AppRouter = .shared
     private let routes: [Route]
+    /// 入场序号偏移：一个侧边栏里有多个列表时，后面的列表要接着前面的序号排，
+    /// 否则两段列表会同时从 0 开始入场。
+    private let indexOffset: Int
+    /// 退场错峰的控件总数（PCL2 的 `70 / Controls.Count * Id`）。
+    /// 不传就按本列表的条目数算；有灰色小标题时由调用方传入整列的数量。
+    private let exitCount: Int?
     private let performRefresh: ((AppRoute) -> Void)?
     
     init(_ routes: Route..., performRefresh: ((AppRoute) -> Void)? = nil) {
         self.init(routeList: routes, performRefresh: performRefresh)
     }
     
-    init(routeList: [Route], performRefresh: ((AppRoute) -> Void)? = nil) {
+    init(
+        routeList: [Route],
+        indexOffset: Int = 0,
+        exitCount: Int? = nil,
+        performRefresh: ((AppRoute) -> Void)? = nil
+    ) {
         self.routes = routeList
+        self.indexOffset = indexOffset
+        self.exitCount = exitCount
         self.performRefresh = performRefresh
     }
     
@@ -32,8 +45,8 @@ struct MyNavigationList: View {
                 RouteView(
                     route: route,
                     refresh: performRefresh,
-                    entranceIndex: index,
-                    exitDelay: SidebarExit.delay(for: index, count: routes.count),
+                    entranceIndex: indexOffset + index,
+                    exitDelay: SidebarExit.delay(for: indexOffset + index, count: exitCount ?? routes.count),
                     // 点击必须由条目自己的手势处理：条目里挂了一个 minimumDistance 为 0 的
                     // DragGesture（按下缩放），它会先认领这次按压，外层 onTapGesture 就再也收不到了。
                     onSelect: {
@@ -67,15 +80,10 @@ struct MyNavigationList: View {
 
 private struct RouteView: View {
     @ObservedObject private var router: AppRouter = .shared
-    @Environment(\.disableCardAppearAnimation) private var disableEntrance
-    /// 页面是否正在退场（由 AppSidebarView 注入）。
-    @Environment(\.pageExiting) private var pageExiting
     @State private var hovered: Bool = false
     @State private var pressed: Bool = false
     @State private var selected: Bool
     @State private var lastRefresh: Date = .distantPast
-    /// 逐条目入场进度。换页时整行会换身份重建，所以它自然从 0 重新开始。
-    @State private var appeared: Bool = false
     private let route: AppRoute
     private let image: ImageResource?
     private let label: String
@@ -186,37 +194,83 @@ private struct RouteView: View {
         .animation(hovered ? .easeOut(duration: 0.12) : .easeOut(duration: 0.18), value: hovered)
         .animation(.easeOut(duration: 0.12), value: pressed)
         .animation(.spring(response: 0.2), value: selected)
-        // 逐条目入场：整列表共用一条时间线，靠 delay 错峰。
-        // 只在侧边栏被重建时播一次——点侧边栏条目切子页面不重播。
-        .modifier(SidebarEntranceShape(progress: appeared ? 1 : 0))
-        .animation(
-            .linear(duration: SidebarEntrance.duration).delay(SidebarEntrance.delay(for: entranceIndex)),
-            value: appeared
-        )
-        // 逐条目退场：50ms 线性淡出 + 左移 6pt，整列共用 70ms 错峰窗口
-        // （PCL2 的 MyPageLeft.TriggerHideAnimation 的 AnimatedControl 分支）。
-        .modifier(ControlExitShape(
-            progress: pageExiting ? 1 : 0,
-            offset: CGSize(width: SidebarExit.offset, height: 0),
-            enabled: !disableEntrance
-        ))
-        .animation(
-            pageExiting && !disableEntrance
-                ? .linear(duration: SidebarExit.duration).delay(exitDelay)
-                : nil,
-            value: pageExiting
-        )
-        .onAppear {
-            guard !disableEntrance else {
-                appeared = true
-                return
-            }
-            // 下一帧再翻：同一帧里 false → true 不会产生动画。
-            DispatchQueue.main.async { appeared = true }
-        }
+        // 逐条目入场 / 退场：与侧边栏里的灰色小标题共用同一条时间线（见 SidebarItemAnimation）。
+        .modifier(SidebarItemAnimation(entranceIndex: entranceIndex, exitDelay: exitDelay))
         .onChange(of: router.last) { newValue in
             selected = newValue == route
         }
+    }
+}
+
+/// 侧边栏里会参与入场 / 退场动画的控件共用的修饰器。
+///
+/// PCL2 的 MyPageLeft 把灰色小标题（TextBlock）和条目（MyListItem）放在同一个 StackPanel 里，
+/// `GetAllAnimControls` 按视觉顺序统一编号——标题和条目是同一条时间线上的相邻两格。
+/// 早先只有 MyNavigationList 的条目挂了动画，标题是静止的，切页时看起来就是"标题没跟上"。
+struct SidebarItemAnimation: ViewModifier {
+    let entranceIndex: Int
+    let exitDelay: Double
+
+    @Environment(\.disableCardAppearAnimation) private var disableEntrance
+    /// 页面是否正在退场（由 AppSidebarView 注入）。
+    @Environment(\.pageExiting) private var pageExiting
+    /// 逐控件入场进度。侧边栏被重建时新实例从 false 开始，所以入场只播一次。
+    @State private var appeared: Bool = false
+
+    func body(content: Content) -> some View {
+        content
+            // 入场：整列共用一条时间线，靠 delay 错峰。
+            .modifier(SidebarEntranceShape(progress: appeared ? 1 : 0))
+            .animation(
+                .linear(duration: SidebarEntrance.duration).delay(SidebarEntrance.delay(for: entranceIndex)),
+                value: appeared
+            )
+            // 退场：50ms 线性淡出 + 左移 6pt，整列共用 70ms 错峰窗口
+            // （PCL2 的 MyPageLeft.TriggerHideAnimation 的 AnimatedControl 分支）。
+            .modifier(ControlExitShape(
+                progress: pageExiting ? 1 : 0,
+                offset: CGSize(width: SidebarExit.offset, height: 0),
+                enabled: !disableEntrance
+            ))
+            .animation(
+                pageExiting && !disableEntrance
+                    ? .linear(duration: SidebarExit.duration).delay(exitDelay)
+                    : nil,
+                value: pageExiting
+            )
+            .onAppear {
+                guard !disableEntrance else {
+                    appeared = true
+                    return
+                }
+                // 下一帧再翻：同一帧里 false → true 不会产生动画。
+                DispatchQueue.main.async { appeared = true }
+            }
+    }
+}
+
+/// 侧边栏里的灰色小标题（PCL2 的 MyPageLeft 里那些 TextBlock）。
+///
+/// 它和条目共用同一套入场 / 退场，序号由调用方统一编排：
+/// 一个侧边栏里有多个列表时，标题与后面的列表要接着前面的序号排。
+struct SidebarSectionTitle: View {
+    private let text: String
+    private let color: Color
+    private let entranceIndex: Int
+    private let exitDelay: Double
+
+    init(_ text: String, color: Color = .colorGray2, index: Int, exitCount: Int) {
+        self.text = text
+        self.color = color
+        self.entranceIndex = index
+        self.exitDelay = SidebarExit.delay(for: index, count: exitCount)
+    }
+
+    var body: some View {
+        MyText(text, size: 12, color: color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 13)
+            .modifier(SidebarItemAnimation(entranceIndex: entranceIndex, exitDelay: exitDelay))
     }
 }
 

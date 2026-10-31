@@ -19,24 +19,13 @@ struct LaunchPage: View {
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .preset:
-            customHomepage(presetView)
+            presetView
         case .local:
-            customHomepage(CustomHomepageView(source: .localFile))
+            CustomHomepageView(source: .localFile)
         case .remote:
-            customHomepage(remoteView)
+            remoteView
         case .demo:
             DemoHomepageView()
-        }
-    }
-
-    /// 自定义主页（预设 / 本地 / 联网）统一套一层测试期提示：
-    /// 这套解析与渲染还比较重，复杂主页在低配机器上会明显掉帧。
-    private func customHomepage<Content: View>(_ content: Content) -> some View {
-        VStack(spacing: 0) {
-            MyTip(text: "主页自定义仍处于测试阶段，渲染开销较大、性能可能不佳，请酌情使用。", theme: .yellow)
-                .padding(.horizontal, 25)
-                .padding(.top, 25)
-            content
         }
     }
 

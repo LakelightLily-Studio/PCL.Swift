@@ -21,6 +21,7 @@ struct MinecraftInstallOptionsPage: View {
         CardContainer {
             VStack {
                 MyTip(text: "Forge / NeoForge 版本列表由 BMCLAPI 提供。", theme: .blue)
+                    .cardIndex(0)
                     .padding(.bottom, 10)
                 MyCard(nil) {
                     HStack {
@@ -39,14 +40,15 @@ struct MinecraftInstallOptionsPage: View {
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
+                .cardIndex(1)
                 .padding(.bottom, 15)
                 VStack(spacing: 6) {
                     ModLoaderCard(.fabric, viewModel.version.id, $viewModel.loader)
-                        .cardIndex(1)
-                    ModLoaderCard(.forge, viewModel.version.id, $viewModel.loader)
                         .cardIndex(2)
-                    ModLoaderCard(.neoforge, viewModel.version.id, $viewModel.loader)
+                    ModLoaderCard(.forge, viewModel.version.id, $viewModel.loader)
                         .cardIndex(3)
+                    ModLoaderCard(.neoforge, viewModel.version.id, $viewModel.loader)
+                        .cardIndex(4)
                 }
                 Spacer()
             }

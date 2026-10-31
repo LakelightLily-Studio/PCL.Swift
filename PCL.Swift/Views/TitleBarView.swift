@@ -90,6 +90,14 @@ struct TitleBarView: View {
         }
     }
 
+    /// 标题栏前景色。
+    ///
+    /// 「液态玻璃」是一块浅色玻璃（不掺主题色），白字会糊在背景里，所以那一档换成深色；
+    /// 「纯色 / 线格」两档都是主题色底，仍然用白字。
+    private var barForeground: Color {
+        LauncherConfig.shared.navigationBarBackground == .liquidGlass ? .color1 : .white
+    }
+
     /// 主页面标题栏：居中的页签按钮组 + 靠左的标识。
     private var mainBar: some View {
         ZStack(alignment: .leading) {
@@ -122,7 +130,7 @@ struct TitleBarView: View {
             WindowButton(.btnBack) {
                 router.removeLast()
             }
-            MyText(displayedTitle, size: 16, color: .white)
+            MyText(displayedTitle, size: 16, color: barForeground)
         }
     }
 
@@ -198,7 +206,7 @@ struct TitleBarView: View {
                 Image(.iconTitleLogo)
                     .resizable()
                     .scaledToFit()
-                    .foregroundStyle(.white)
+                    .foregroundStyle(barForeground)
                     .frame(height: 19)
                 MyTag("Swift", labelColor: .color2)
 
@@ -210,7 +218,7 @@ struct TitleBarView: View {
             MyText(
                 LauncherConfig.shared.titleBarText.isEmpty ? "PCL.Swift" : LauncherConfig.shared.titleBarText,
                 size: 16,
-                color: .white
+                color: barForeground
             )
             .lineLimit(1)
         case .image:
@@ -223,7 +231,7 @@ struct TitleBarView: View {
                 Image(.iconTitleLogo)
                     .resizable()
                     .scaledToFit()
-                    .foregroundStyle(.white)
+                    .foregroundStyle(barForeground)
                     .frame(height: 19)
             }
         }
@@ -258,8 +266,14 @@ private enum TitleBarTransition {
 
 private struct PageButton: View {
     @ObservedObject private var router: AppRouter = .shared
+    /// 观察配置：切到「液态玻璃」时前景色要跟着从白换成深色。
+    @ObservedObject private var configObserver: LauncherConfigObserver = .shared
     @State private var hovered: Bool = false
     private var isRoot: Bool { router.root == route }
+    /// 标题栏是不是浅色的玻璃：那一档白字看不清，得换深色。
+    private var isGlassBar: Bool {
+        LauncherConfig.shared.navigationBarBackground == .liquidGlass
+    }
     private let label: String
     private let icon: ImageResource
     private let route: AppRoute
@@ -303,10 +317,18 @@ private struct PageButton: View {
     }
     
     private var foregroundColor: Color {
-        isRoot ? .color2 : .white
+        if isRoot {
+            // 深色外观下与左侧边栏的选中项统一：那边选中用的就是 color3（主题色）。
+            // 浅色仍用更深的 color2——白底药丸上 color3 偏浅，压不住。
+            return Color.isDark ? .color3 : .color2
+        }
+        return isGlassBar ? .color1 : .white
     }
     
     private var backgroundColor: Color {
-        .white.opacity(isRoot ? 1 : hovered ? 0.25 : 0)
+        if isRoot { return .white }
+        guard hovered else { return .clear }
+        // 悬停底色跟着前景色走：白字配半透明白，深色字配一点黑，两种底上都看得见。
+        return isGlassBar ? Color.color1.opacity(0.08) : .white.opacity(0.25)
     }
 }

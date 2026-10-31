@@ -147,7 +147,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
         
-        NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        // 深浅色外观（跟随系统 / 浅色 / 深色）统一由 ThemeManager 落到 NSApp 上。
+        // 这里不能写死 .aqua：那会把「深色」和「跟随系统」一起按死成浅色。
+        ThemeManager.shared.installAppearance()
         let startupFlow: StartupFlow = .init(stage: StartupFlow.initialStage())
         self.startupFlow = startupFlow
         self.window = AppWindow(instanceManager: instanceManager, startupFlow: startupFlow)
@@ -199,8 +201,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             LauncherConfig.flush()
         }
         EasyTierManager.shared.terminateAll()
-        // 由本启动器起的 DSH 必须跟着一起退出，避免留下孤儿进程。
-        DSHLaunchManager.shared.terminateAll()
     }
     
     private func addEscapeMonitor() {

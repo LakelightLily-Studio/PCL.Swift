@@ -86,7 +86,19 @@ sync_about_avatars() {
   echo "头像：$(ls "$dst" | wc -l | xargs) 张 → assets/about"
 }
 
+# 实例图标：图标选择器里的那些方块 / 物品（assets/icons/<id>.png，文件名就是图标的 id）。
+# 客户端取不到时会退回打包在 App 里的同一张图，所以这里缺几张不会让选择器变成空格子。
+sync_instance_icons() {
+  local src="dist-assets/icons"
+  local dst="$WORKDIR/dist/assets/icons"
+  [ -d "$src" ] || return 0
+  mkdir -p "$dst"
+  cp "$src"/*.png "$dst/"
+  echo "实例图标：$(ls "$dst" | wc -l | xargs) 张 → assets/icons"
+}
+
 sync_about_avatars
+sync_instance_icons
 cp CHANGELOG.md "$WORKDIR/dist/changelog.md"
 
 if [ "$ASSETS_ONLY" != "1" ]; then

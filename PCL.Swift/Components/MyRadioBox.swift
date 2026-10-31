@@ -46,7 +46,7 @@ struct MyRadioBox: View {
             ZStack {
                 // 圈内底色：按下时变 ColorBrushBg1，其余时间是 #55ffffff。
                 Circle()
-                    .fill(pressed && enabled ? Color.colorBg1 : Color.white.opacity(0x55 / 255.0))
+                    .fill(pressed && enabled ? Color.colorBg1 : Color.cardBackground.opacity(0x55 / 255.0))
                 Circle()
                     .strokeBorder(strokeColor, lineWidth: 1.1)
                 Circle()

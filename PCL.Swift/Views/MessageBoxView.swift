@@ -19,7 +19,7 @@ struct MessageBoxView: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 7)
-                .fill(.white)
+                .fill(Color.cardBackground)
                 .shadow(color: .color1.opacity(0.8), radius: 20)
             VStack(alignment: .leading, spacing: 0) {
                 MyText(model.title, size: 23, color: foregroundColor)

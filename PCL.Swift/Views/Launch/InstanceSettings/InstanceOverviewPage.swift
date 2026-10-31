@@ -12,6 +12,7 @@ import Core
 
 struct InstanceOverviewPage: View {
     @StateObject private var viewModel: InstanceOverviewViewModel
+    @State private var showingIconPicker: Bool = false
 
     init(instanceManager: InstanceManager, id: String) {
         self._viewModel = .init(wrappedValue: .init(instanceManager: instanceManager, id: id))
@@ -26,6 +27,9 @@ struct InstanceOverviewPage: View {
                 .cardIndex(2)
             managementCard
                 .cardIndex(3)
+        }
+        .sheet(isPresented: $showingIconPicker) {
+            InstanceIconPicker(viewModel: viewModel)
         }
     }
 
@@ -63,8 +67,15 @@ struct InstanceOverviewPage: View {
         MyCard("个性化", foldable: false) {
             VStack(alignment: .leading, spacing: 12) {
                 SettingRow("图标", labelWidth: 80) {
-                    MySelect(iconBinding, entries: IconOption.allCases)
-                        .frame(maxWidth: .infinity)
+                    // 原版的图标是一排预设方块 / 物品的网格，这里同样开一个选择器，
+                    // 不再只有「自动 / 自定义图片」两个选项。
+                    HStack(spacing: 12) {
+                        InstanceIconView(icon: icon)
+                            .frame(width: 22, height: 22)
+                        MyButton("选择图标…") { showingIconPicker = true }
+                            .frame(width: 140)
+                        Spacer(minLength: 0)
+                    }
                 }
                 SettingRow("分类", labelWidth: 80) {
                     MySelect(categoryBinding, entries: categoryEntries)
@@ -85,29 +96,6 @@ struct InstanceOverviewPage: View {
                 .padding(.top, 4)
             }
         }
-    }
-
-    /// 图标下拉：原版在这里列出一堆预设方块图标，本启动器只有「自动 / 自定义图片」两种来源。
-    enum IconOption: String, CaseIterable, CustomStringConvertible {
-        case automatic, custom
-
-        var description: String {
-            self == .automatic ? "自动" : "自定义…"
-        }
-    }
-
-    private var iconBinding: Binding<IconOption> {
-        .init(
-            get: { viewModel.instance.customIconURL == nil ? .automatic : .custom },
-            set: { option in
-                switch option {
-                case .automatic:
-                    viewModel.clearIcon()
-                case .custom:
-                    chooseIcon()
-                }
-            }
-        )
     }
 
     private var categoryEntries: [String] {
@@ -189,19 +177,6 @@ struct InstanceOverviewPage: View {
                     hint("删除版本失败：\(error.localizedDescription)", type: .critical)
                 }
             }
-        }
-    }
-
-    private func chooseIcon() {
-        let panel: NSOpenPanel = .init()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.png, .jpeg]
-        panel.title = "选择实例图标"
-        panel.begin { result in
-            guard result == .OK, let url = panel.url else { return }
-            viewModel.setIcon(url)
         }
     }
 

@@ -29,14 +29,18 @@ struct InstanceConfigPage: View {
 
     var body: some View {
         CardContainer {
+            // 提示条也是页面级控件：它占第 0 格，后面的卡片依次往后排
+            // （PCL2 的 MyPageRight 把 MyHint 和 MyCard 放在同一条时间线上统一编号）。
             MyTip(text: "这些设置只对该游戏版本生效，不影响其他版本。", theme: .blue)
+                .cardIndex(0)
             launchOptionsCard
-            memoryCard
                 .cardIndex(1)
-            serverCard
+            memoryCard
                 .cardIndex(2)
-            advancedCard
+            serverCard
                 .cardIndex(3)
+            advancedCard
+                .cardIndex(4)
         }
         .onAppear(perform: refreshMemoryReadings)
     }

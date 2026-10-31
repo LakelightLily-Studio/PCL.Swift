@@ -41,6 +41,17 @@ public enum DomesticAssets {
         aboutDirectory + "/" + name + ".png"
     }
 
+    /// 仓库里放「实例图标」的目录。
+    ///
+    /// 这套图标（草方块、工作台、钻石剑……）同样不跟着发版走：换一张图只要往国内仓库推一次。
+    /// 文件名是图标的 id（见 InstanceIconCatalog），打包在 App 里的同图只作离线兜底。
+    public static let instanceIconDirectory: String = "assets/icons"
+
+    /// 某个实例图标在仓库里的相对路径。
+    public static func instanceIconPath(_ name: String) -> String {
+        instanceIconDirectory + "/" + name + ".png"
+    }
+
     /// API raw 需要 `?ref=main` 才会给内容（不带时可能落到默认分支的裸文件接口）。
     private static func apiURL(_ path: String) -> URL {
         let url: URL = apiBase.appending(path: path)

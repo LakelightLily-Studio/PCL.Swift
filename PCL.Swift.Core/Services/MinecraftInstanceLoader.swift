@@ -89,6 +89,7 @@ public enum MinecraftInstanceLoader {
             config: config,
             displayName: metadata?.displayName,
             customIconURL: metadata?.customIconURL,
+            customIconName: metadata?.customIconName,
             customDescription: metadata?.customDescription,
             isFavorite: metadata?.isFavorite ?? false,
             category: metadata?.category,
@@ -215,6 +216,8 @@ public enum MinecraftInstanceLoader {
         public var version: MinecraftVersion?
         public var displayName: String?
         public var customIconURL: URL?
+        /// 选中的预设图标 id；用户自己选的图片没有 id。
+        public var customIconName: String?
         public var customDescription: String?
         public var isFavorite: Bool
         public var category: String?
@@ -224,6 +227,7 @@ public enum MinecraftInstanceLoader {
             version: MinecraftVersion?,
             displayName: String? = nil,
             customIconURL: URL? = nil,
+            customIconName: String? = nil,
             customDescription: String? = nil,
             isFavorite: Bool = false,
             category: String? = nil
@@ -232,6 +236,7 @@ public enum MinecraftInstanceLoader {
             self.version = version
             self.displayName = displayName
             self.customIconURL = customIconURL
+            self.customIconName = customIconName
             self.customDescription = customDescription
             self.isFavorite = isFavorite
             self.category = category
@@ -243,6 +248,7 @@ public enum MinecraftInstanceLoader {
             self.version = try container.decodeIfPresent(MinecraftVersion.self, forKey: .version)
             self.displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
             self.customIconURL = try container.decodeIfPresent(URL.self, forKey: .customIconURL)
+            self.customIconName = try container.decodeIfPresent(String.self, forKey: .customIconName)
             self.customDescription = try container.decodeIfPresent(String.self, forKey: .customDescription)
             self.isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
             self.category = try container.decodeIfPresent(String.self, forKey: .category)
@@ -338,6 +344,7 @@ public extension MinecraftInstanceLoader {
             version: instance.version,
             displayName: instance.displayName,
             customIconURL: instance.customIconURL,
+            customIconName: instance.customIconName,
             customDescription: instance.customDescription,
             isFavorite: instance.isFavorite,
             category: instance.category

@@ -2,7 +2,7 @@
 //  NavigationBarBackgroundView.swift
 //  PCL.Swift
 //
-//  导航栏（标题栏）背景：纯色，或主题色 + 白色线格。
+//  导航栏（标题栏）背景：纯色、主题色 + 白色线格，或液态玻璃。
 //  向导顶栏和启动器顶栏共用，保证两处样式始终一致。
 //
 
@@ -14,9 +14,14 @@ struct NavigationBarBackgroundView: View {
 
     var body: some View {
         ZStack {
-            Color.color3
-            if LauncherConfig.shared.navigationBarBackground == .lines {
+            switch LauncherConfig.shared.navigationBarBackground {
+            case .theme:
+                Color.color3
+            case .lines:
+                Color.color3
                 InfiniteGrid(lineColor: .white.opacity(0.14), spacing: 24)
+            case .liquidGlass:
+                LiquidGlassView()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

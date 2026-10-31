@@ -116,7 +116,12 @@ struct SetupWizardView: View {
     private var titleBar: some View {
         ZStack(alignment: .leading) {
             NavigationBarBackgroundView()
-            MyText(step.pageTitle, size: 22, color: .white)
+            // 「液态玻璃」是浅色的，白字看不清；与启动器标题栏同一套判断。
+            MyText(
+                step.pageTitle,
+                size: 22,
+                color: LauncherConfig.shared.navigationBarBackground == .liquidGlass ? .color1 : .white
+            )
                 .id(step)
                 .transition(.opacity)
                 .lineLimit(1)

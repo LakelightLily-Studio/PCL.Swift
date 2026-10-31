@@ -64,6 +64,14 @@ enum PageEntrance {
         Double(min(max(index, 0), maxStaggerSteps)) * stagger
     }
 
+    /// 整页入场动画的完整窗口：最长的那条位移动画 + 最大错峰。
+    ///
+    /// 页面里的异步内容（「更多」页的头像之类）要等这段时间过去再换成云端的新图：
+    /// 动画中途换图会让卡片重绘，新图从零尺寸插进来，看起来就是图标在页面上"暂留"了一下。
+    static var window: Double {
+        duration + delay(for: maxStaggerSteps)
+    }
+
     /// 驱动整条动画的 Animation（线性：曲线由 opacity/offset 自己算）。
     static func animation(for index: Int) -> Animation {
         .linear(duration: duration).delay(delay(for: index))

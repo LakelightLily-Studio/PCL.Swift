@@ -39,6 +39,11 @@ public class MinecraftInstance: ObservableObject, Hashable, Identifiable, Equata
     public var displayName: String?
     /// 用户自定义的实例图标文件路径。nil 表示按加载器推导。
     public var customIconURL: URL?
+    /// 选中的预设图标 id（见 InstanceIconCatalog）。
+    ///
+    /// 只用来在图标选择器里标出当前是哪一格：真正显示的图仍然是 customIconURL 指向的文件，
+    /// 用户自己选的图片没有 id，为 nil。
+    public var customIconName: String?
     /// 用户自定义的实例描述。
     public var customDescription: String?
     /// 是否加入收藏夹。
@@ -62,6 +67,7 @@ public class MinecraftInstance: ObservableObject, Hashable, Identifiable, Equata
         config: Config,
         displayName: String? = nil,
         customIconURL: URL? = nil,
+        customIconName: String? = nil,
         customDescription: String? = nil,
         isFavorite: Bool = false,
         category: String? = nil,
@@ -75,6 +81,7 @@ public class MinecraftInstance: ObservableObject, Hashable, Identifiable, Equata
         self.config = config
         self.displayName = displayName
         self.customIconURL = customIconURL
+        self.customIconName = customIconName
         self.customDescription = customDescription
         self.isFavorite = isFavorite
         self.category = category

@@ -29,3 +29,6 @@ Resources/Secrets.local.properties
 dist/
 dmg_temp/
 artifact/
+
+# 本地工具状态（如 gh 的 device-id），不进版本库
+.local/
