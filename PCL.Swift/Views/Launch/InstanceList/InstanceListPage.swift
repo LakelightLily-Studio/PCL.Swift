@@ -155,9 +155,11 @@ struct InstanceIconView: View {
     var body: some View {
         switch icon {
         case .custom(let image):
+            // 图标是 256×256 的渲染图（不是像素画），缩到 36pt 用高质量插值，
+            // .none 会让它锯齿明显。
             Image(nsImage: image)
                 .resizable()
-                .interpolation(.none)
+                .interpolation(.high)
                 .scaledToFit()
         case .loader(let loader):
             Image(loader.icon)

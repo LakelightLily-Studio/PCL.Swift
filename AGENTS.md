@@ -614,9 +614,12 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
 - **实例图标**（实例设置 → 概览 → 图标）走同一套：云端 `assets/icons/<id>.png`，
   取图逻辑在 `Managers/InstanceIconStore.swift`（内存 → 磁盘图标缓存 → `Assets.xcassets/Icons/Instance` 的兜底图 → 云端）。
   预设目录是 `InstanceIconCatalog`：顺序 = 默认（不在表里）→ 草方块 → 其余按创造模式物品栏的分类顺序 → 模组加载器。
-  源图由 `Scripts/generate-instance-icons.py` 从官方 client.jar 的 16×16 贴图渲染（方块 2:1 等轴测，
-  顶 1.0 / 左 0.8 / 右 0.6），产物放在 `dist-assets/icons/`，发版时由 publish-dist.sh 同步。
+  源图由 `Scripts/fetch-instance-icons.py` 从红河素材站（`https://honghemc.cn/app/`，
+  1024×1024 透明 PNG）下载后统一缩到 256，产物放在 `dist-assets/icons/`，发版时由 publish-dist.sh 同步；
+  四个模组加载器图标不是原版素材（取自 PCL2 与各自官网），不在脚本里。
   **云端与打包两份都要留**：换图标不用发版，但断网时选择器不能是空的。
+  换图后必须同时改 `InstanceIconStore.iconSetVersion`：云端路径不变，客户端按 URL 做磁盘缓存，
+  不换版本号老用户会一直用旧图（`DomesticAssets.mirrors(for:cacheBust:)` 负责把版本拼进每条地址）。
 
 ## 启动器更新渠道
 

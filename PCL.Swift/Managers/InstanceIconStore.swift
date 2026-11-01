@@ -131,6 +131,13 @@ enum InstanceIconCatalog {
 final class InstanceIconStore {
     static let shared: InstanceIconStore = .init()
 
+    /// 图标集的版本号。
+    ///
+    /// 云端路径是固定的 assets/icons/<id>.png，换图不改名；客户端按 URL 做磁盘缓存，
+    /// 所以换图后必须把这个号一起改掉，老用户的旧图才会被绕开、重新拉一次。
+    /// 改这里的同时记得把新图推到国内仓库（Scripts/publish-dist.sh）。
+    static let iconSetVersion: String = "20261101"
+
     /// 本次会话已经拿到的图（云端那份，或磁盘缓存里那份）。
     private var memory: [String: NSImage] = [:]
     /// 拉取失败的时间戳，5 分钟内不再重试（与「更多」页头像同一套策略）。
@@ -157,7 +164,7 @@ final class InstanceIconStore {
         let path: String = DomesticAssets.instanceIconPath(icon.id)
         guard let key = cacheKey(for: icon) else { return false }
 
-        for url in DomesticAssets.mirrors(for: path) {
+        for url in DomesticAssets.mirrors(for: path, cacheBust: Self.iconSetVersion) {
             do {
                 let response = try await HTTPClient.shared.get(url, timeout: 15)
                 guard (200..<300).contains(response.statusCode) else {
@@ -190,7 +197,7 @@ final class InstanceIconStore {
 
     private func cacheKey(for icon: InstancePresetIcon) -> String? {
         let path: String = DomesticAssets.instanceIconPath(icon.id)
-        guard let first = DomesticAssets.mirrors(for: path).first else { return nil }
+        guard let first = DomesticAssets.mirrors(for: path, cacheBust: Self.iconSetVersion).first else { return nil }
         return ResourceCacheCenter.imageKey(first, cropRect: nil)
     }
 

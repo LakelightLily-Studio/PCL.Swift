@@ -23,14 +23,27 @@ public enum DomesticAssets {
     public static let giteeBase: URL = URL(string: "https://gitee.com/functy/pcl-swift-dist/raw/main/")!
 
     /// 仓库内相对路径 → 依次尝试的绝对地址。
-    /// - Parameter path: 相对仓库根目录的路径，例如 `assets/about/Functy.png`。
-    public static func mirrors(for path: String) -> [URL] {
+    /// - Parameters:
+    ///   - path: 相对仓库根目录的路径，例如 `assets/about/Functy.png`。
+    ///   - cacheBust: 可选的版本号。会作为查询参数拼到每条地址上，
+    ///     让「换了图但路径没变」的资源能绕开客户端磁盘缓存（见 InstanceIconStore.iconSetVersion）。
+    public static func mirrors(for path: String, cacheBust: String? = nil) -> [URL] {
         let relative: String = path.hasPrefix("/") ? String(path.dropFirst()) : path
         return [
-            apiURL(relative),
-            rawBase.appending(path: relative),
-            giteeBase.appending(path: relative),
+            apiURL(relative, cacheBust: cacheBust),
+            withCacheBust(rawBase.appending(path: relative), cacheBust),
+            withCacheBust(giteeBase.appending(path: relative), cacheBust),
         ]
+    }
+
+    /// 给地址补一个 `v=` 参数；没有版本号就原样返回。
+    private static func withCacheBust(_ url: URL, _ cacheBust: String?) -> URL {
+        guard let cacheBust, !cacheBust.isEmpty else { return url }
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var items: [URLQueryItem] = components.queryItems ?? []
+        items.append(URLQueryItem(name: "v", value: cacheBust))
+        components.queryItems = items
+        return components.url ?? url
     }
 
     /// 仓库里放「更多」页头像的目录。
@@ -53,10 +66,14 @@ public enum DomesticAssets {
     }
 
     /// API raw 需要 `?ref=main` 才会给内容（不带时可能落到默认分支的裸文件接口）。
-    private static func apiURL(_ path: String) -> URL {
+    private static func apiURL(_ path: String, cacheBust: String? = nil) -> URL {
         let url: URL = apiBase.appending(path: path)
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
-        components.queryItems = [URLQueryItem(name: "ref", value: "main")]
+        var items: [URLQueryItem] = [URLQueryItem(name: "ref", value: "main")]
+        if let cacheBust, !cacheBust.isEmpty {
+            items.append(URLQueryItem(name: "v", value: cacheBust))
+        }
+        components.queryItems = items
         return components.url ?? url
     }
 }

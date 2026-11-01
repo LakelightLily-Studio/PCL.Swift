@@ -27,15 +27,19 @@ sips -Z 256 /tmp/pclproto/PCLProto.svg.png --out dist-assets/about/PCLProto.png
 取不到时退回 `PCL.Swift/Assets.xcassets/Icons/Instance` 里的同一张图（断网也能选图标），
 开了「设置 → 其他 → 缓存 → 图标缓存」时云端那份会落盘到 `Caches/images`。
 
-这些 PNG 是 128×128、透明背景，由脚本从 **Minecraft 官方客户端素材**渲染而来：
+这些 PNG 是 256×256、透明背景，取自 **红河素材站**（<https://honghemc.cn/app/>）的 Minecraft 图标库
+（站点原图 1024×1024，脚本统一缩到 256）：
 
 ```bash
-# 1. 解包官方 client.jar（版本随意，脚本只用到 textures/item 与 textures/block）
-unzip -q client.jar 'assets/minecraft/textures/*' -d /tmp/mcassets/extract
-# 2. 渲染（默认读 /tmp/mcassets/extract，可用 PCL_MC_ASSETS 覆盖）
-python3 Scripts/generate-instance-icons.py --contact /tmp/icons_contact.png
+# 默认写入 dist-assets/icons；--out 可换目录
+python3 Scripts/fetch-instance-icons.py
 ```
 
-方块是 2:1 等轴测渲染（顶面 1.0 / 左面 0.8 / 右面 0.6 的亮度），物品是 16×16 贴图放大 8 倍；
-铁砧与 NeoForge / Fabric 取 PCL2 的同名图片，Quilt 与 OptiFine 取官方标识。
-换图标只要替换这里对应的 PNG 再推一次国内仓库，**不用发版**。
+站点路径规则是 `/images/<分类>/<子分类>/<文件名>`（分类带编号前缀，例如 `20. Blocks`），
+slug 与站点的对应关系写在脚本的 `ICONS` 表里，换版本时照站点目录改表即可。
+四个模组加载器图标（neoforge / fabric / quilt / optifine）不是原版素材，不在脚本里：
+NeoForge / Fabric 取 PCL2 的同名图片，Quilt 与 OptiFine 取官方标识，直接放在本目录。
+
+换图标只要替换这里对应的 PNG 再推一次国内仓库，**不用发版**；
+客户端的图标 URL 带一个版本号（`DomesticAssets.mirrors(for:cacheBust:)`），
+换图后把 `InstanceIconStore.iconSetVersion` 一起改掉，否则老用户会一直用磁盘里的旧图。

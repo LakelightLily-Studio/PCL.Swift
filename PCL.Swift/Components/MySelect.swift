@@ -80,7 +80,7 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
                 if let iconName = icon?(selected) {
                     Image(iconName)
                         .resizable()
-                        .interpolation(.none)
+                        .interpolation(.high)
                         .scaledToFit()
                         .frame(width: 16, height: 16)
                         .padding(.leading, 2)
@@ -211,7 +211,7 @@ private struct PopupView<Entry: Hashable & CustomStringConvertible>: View {
                                 if let iconName = icon?(entry) {
                                     Image(iconName)
                                         .resizable()
-                                        .interpolation(.none)
+                                        .interpolation(.high)
                                         .scaledToFit()
                                         .frame(width: 16, height: 16)
                                 }
