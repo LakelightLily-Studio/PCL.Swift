@@ -2,6 +2,16 @@ name: Build and release
 
 on:
   workflow_dispatch:
+    inputs:
+      sign_app:
+        description: Sign with Developer ID and notarize (needs MACOS_* secrets)
+        required: false
+        type: boolean
+        # 默认 ad-hoc：仓库目前没有配置 MACOS_CERTIFICATE 一类的 secret，
+        # 打开它会在 import-codesign-certs 那一步直接失败（"At least one of
+        # p12-filepath or p12-file-base64 must be provided"）。
+        # 要出正式签名包时把 secret 配齐，再用 sign_app=true 手动跑一次。
+        default: false
 
 permissions:
   contents: write
@@ -19,10 +29,12 @@ jobs:
       build_configuration: Release
       upload_artifact: true
       arch: ${{ matrix.arch }}
+      sign_app: ${{ inputs.sign_app }}
     secrets: inherit
 
   release:
-    # 与 build.yml 一致：xcode-27 镜像（macOS 27 + Xcode 27）。公证仍走 notarytool。
+    # 与 build.yml 一致：xcode-27 镜像（macOS 27 + Xcode 27）。
+    # 公证只在 sign_app=true 时做：ad-hoc 签名的包过不了 notarytool。
     runs-on: xcode-27
     needs: build
     steps:
@@ -45,7 +57,9 @@ jobs:
           path: ./artifact
           merge-multiple: true
 
-      - name: Notarize and package each architecture
+      - name: Package each architecture
+        env:
+          SIGN_APP: ${{ inputs.sign_app }}
         run: |
           set -euo pipefail
           # 解压必须用 ditto：它保留框架里的 Versions/Current 符号链接，
@@ -58,15 +72,18 @@ jobs:
             app="$work/PCL.Swift.app"
             echo "arch in bundle: $(lipo -archs "$app/Contents/MacOS/PCL.Swift")"
 
-            # 先压一份提交公证；公证通过后 staple，再重新压最终资产。
-            ditto -c -k --sequesterRsrc --keepParent "$app" "PCL.Swift-$VERSION_NUMBER-$arch.zip"
-            xcrun notarytool submit "PCL.Swift-$VERSION_NUMBER-$arch.zip" \
-              --apple-id "${{ secrets.MACOS_NOTARY_APPLE_ID }}" \
-              --password "${{ secrets.MACOS_NOTARY_PASSWORD }}" \
-              --team-id "${{ secrets.MACOS_SIGNING_TEAM }}" \
-              --wait
-            xcrun stapler staple "$app"
-            rm -f "PCL.Swift-$VERSION_NUMBER-$arch.zip"
+            if [ "$SIGN_APP" = "true" ]; then
+              # 先压一份提交公证；公证通过后 staple，再重新压最终资产。
+              ditto -c -k --sequesterRsrc --keepParent "$app" "PCL.Swift-$VERSION_NUMBER-$arch.zip"
+              xcrun notarytool submit "PCL.Swift-$VERSION_NUMBER-$arch.zip" \
+                --apple-id "${{ secrets.MACOS_NOTARY_APPLE_ID }}" \
+                --password "${{ secrets.MACOS_NOTARY_PASSWORD }}" \
+                --team-id "${{ secrets.MACOS_SIGNING_TEAM }}" \
+                --wait
+              xcrun stapler staple "$app"
+              rm -f "PCL.Swift-$VERSION_NUMBER-$arch.zip"
+            fi
+
             ditto -c -k --sequesterRsrc --keepParent "$app" "PCL.Swift-$VERSION_NUMBER-$arch.zip"
 
             rm -rf "dmg-$arch" && mkdir "dmg-$arch"
@@ -131,4 +148,3 @@ jobs:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
           TAG: ${{ env.TAG }}
         run: Scripts/publish-dist.sh
-
