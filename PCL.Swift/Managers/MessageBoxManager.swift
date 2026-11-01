@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AppKit
 import Core
 
 class MessageBoxManager: ObservableObject {
@@ -88,6 +89,33 @@ class MessageBoxManager: ObservableObject {
         return text
     }
     
+    /// 弹出自定义图标的模态框（标题左侧实时预览 + URL 输入框 + 选择本地图片）。（Swift Concurrency）
+    /// - Parameters:
+    ///   - title: 模态框标题。
+    ///   - preview: 打开时显示的图，一般是实例当前的图标。
+    ///   - placeholder: 输入框占位符。
+    /// - Returns: 用户填的地址或本地路径。点了取消返回 nil。
+    public func showIconDialogAsync(
+        title: String,
+        preview: NSImage?,
+        placeholder: String? = nil
+    ) async -> String? {
+        let result: MessageBoxResult = await showAsync(
+            title: title,
+            content: .iconURL(initialContent: nil, placeholder: placeholder, preview: preview),
+            level: .info,
+            buttons: [
+                .init(id: MessageBoxManager.cancelButtonID, label: "取消", type: .normal),
+                .init(id: MessageBoxManager.okButtonID, label: "保存", type: .highlight),
+            ]
+        )
+        guard case .input(let text) = result else {
+            warn("期望 result 类型（input）与实际类型（\(result)）不匹配")
+            return nil
+        }
+        return text
+    }
+
     /// 关闭当前模态框。
     /// - Parameter result: 附带的结果。
     @MainActor

@@ -167,7 +167,7 @@ struct LauncherSettingsPage: View {
     private var cacheCard: some View {
         MyCard("缓存", foldable: false) {
             VStack(alignment: .leading, spacing: 10) {
-                SettingRow("资源列表", labelWidth: 140) {
+                SettingRow("资源列表", labelWidth: 120) {
                     MyComboBox(checked: $enableListCache, text: "启用资源列表缓存")
                         .onChange(of: enableListCache) { newValue in
                             LauncherConfig.shared.enableResourceListCache = newValue
@@ -179,7 +179,9 @@ struct LauncherSettingsPage: View {
                         }
                 }
 
-                SettingRow("时间限制", labelWidth: 140) {
+                SettingRow("时间限制", labelWidth: 120) {
+                    // 不要在这里再补 Spacer：SettingRow 的内容区本来就靠右对齐，
+                    // 多一个尾部 Spacer 会把下拉框顶回左边，与上下两行的复选框错开。
                     MySelect($listCacheMinutes, entries: [10, 30])
                         .frame(width: 140)
                         .disabled(!enableListCache)
@@ -189,19 +191,24 @@ struct LauncherSettingsPage: View {
                             configObserver.touch()
                         }
                     MyText("分钟", size: 12, color: .colorGray3)
-                    Spacer()
                 }
 
-                SettingRow("图标", labelWidth: 140) {
+                SettingRow("图标", labelWidth: 120) {
                     MyComboBox(checked: $enableImageCache, text: "启用图标缓存")
                         .onChange(of: enableImageCache) { newValue in
                             LauncherConfig.shared.enableImageCache = newValue
                             // 「关了就没缓存」：内存与磁盘一起清掉。
                             if !newValue {
                                 ResourceCacheCenter.shared.clearImages()
+                                InstanceIconStore.shared.clearMemory()
                             }
                             configObserver.touch()
                         }
+                }
+
+                SettingRow("缓存管理", labelWidth: 120) {
+                    MyButton("清除缓存") { confirmClearCache() }
+                        .frame(width: 120)
                 }
 
                 MyText(
@@ -214,6 +221,23 @@ struct LauncherSettingsPage: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// 清除缓存：内存与磁盘一起清，实例图标的缩略图内存层也一起清掉。
+    private func confirmClearCache() {
+        MessageBoxManager.shared.showText(
+            title: "清除缓存",
+            content: "将清空资源列表缓存与图标缓存（内存与磁盘都会清掉），下次打开会重新从网络获取。\n此操作不可撤销，是否继续？",
+            level: .info,
+            .no(),
+            .yes()
+        ) { button in
+            guard button == 1 else { return }
+            ResourceCacheCenter.shared.clearLists()
+            ResourceCacheCenter.shared.clearImages()
+            InstanceIconStore.shared.clearMemory()
+            hint("缓存已清除！", type: .finish)
         }
     }
 

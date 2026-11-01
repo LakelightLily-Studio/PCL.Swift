@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct MessageBoxModel: Equatable, Identifiable {
     public let id: UUID = .init()
@@ -18,6 +19,11 @@ struct MessageBoxModel: Equatable, Identifiable {
         case text(text: String)
         case list(items: [ListItem])
         case input(initialContent: String?, placeholder: String?)
+        /// 自定义实例图标：标题左侧一个实时预览，正文下面一行「输入框 + 选择本地图片」。
+        ///
+        /// preview 是打开时显示的图（当前图标）；输入框里填了图片地址或选了本地文件后，
+        /// 视图自己会换成那张。
+        case iconURL(initialContent: String?, placeholder: String?, preview: NSImage?)
     }
     
     public enum Level {

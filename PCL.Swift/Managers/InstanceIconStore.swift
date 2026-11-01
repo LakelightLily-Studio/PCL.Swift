@@ -181,6 +181,15 @@ final class InstanceIconStore: ObservableObject {
         return images[icon.id]
     }
 
+    /// 清空内存里那份（设置页「清除缓存」时调用）。
+    ///
+    /// 磁盘那份由 ResourceCacheCenter.clearImages() 负责，这里只管本对象的内存层；
+    /// 清完之后下次进页面会重新从云端拉。
+    func clearMemory() {
+        images.removeAll()
+        failed.removeAll()
+    }
+
     private func cacheKey(for icon: InstancePresetIcon) -> String? {
         let path: String = DomesticAssets.instanceIconPath(icon.id)
         guard let first = DomesticAssets.mirrors(for: path, cacheBust: Self.iconSetVersion).first else { return nil }

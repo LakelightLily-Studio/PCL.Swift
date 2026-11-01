@@ -14,8 +14,6 @@ struct InstanceOverviewPage: View {
     @StateObject private var viewModel: InstanceOverviewViewModel
     /// 预设图标的缩略图：进页面就一次性从云端拉，之后走内存 / 磁盘缓存。
     @ObservedObject private var iconStore: InstanceIconStore = .shared
-    /// 「自定义…」的模态弹窗。
-    @State private var showingCustomDialog: Bool = false
 
     init(instanceManager: InstanceManager, id: String) {
         self._viewModel = .init(wrappedValue: .init(instanceManager: instanceManager, id: id))
@@ -33,11 +31,6 @@ struct InstanceOverviewPage: View {
         }
         // 缩略图一次性拉全：拉过的（内存 / 磁盘缓存里有）会直接跳过。
         .task { await iconStore.preloadAll() }
-        .sheet(isPresented: $showingCustomDialog) {
-            InstanceIconCustomDialog(viewModel: viewModel) {
-                showingCustomDialog = false
-            }
-        }
     }
 
     // MARK: - 实例信息
@@ -93,7 +86,7 @@ struct InstanceOverviewPage: View {
                     // 缩略图早就跟着 preloadAll 拉过了；这里只是把那张图写进实例目录。
                     Task { await viewModel.setIcon(icon) }
                 case .custom:
-                    showingCustomDialog = true
+                    presentCustomIconDialog()
                 }
             }
         )
@@ -106,16 +99,57 @@ struct InstanceOverviewPage: View {
     private func iconImage(for choice: InstanceIconChoice) -> NSImage? {
         switch choice {
         case .automatic:
-            switch viewModel.instance.modLoader {
-            case .fabric: NSImage(named: "iconFabric")
-            case .forge: NSImage(named: "iconForge")
-            case .neoforge: NSImage(named: "iconNeoforge")
-            case nil: NSImage(named: "iconGrassBlock")
-            }
+            NSImage(named: defaultAssetName)
         case .preset(let icon):
             iconStore.image(for: icon)
         case .custom:
             viewModel.iconImage
+        }
+    }
+
+    /// 「默认」那张图：按实例的加载器推导，与下拉第一项、弹窗预览一致。
+    private var defaultAssetName: String {
+        switch viewModel.instance.modLoader {
+        case .fabric: "iconFabric"
+        case .forge: "iconForge"
+        case .neoforge: "iconNeoforge"
+        case nil: "iconGrassBlock"
+        }
+    }
+
+    /// 「自定义…」：用启动器自绘的模态框（MessageBoxManager），不是系统 sheet。
+    ///
+    /// 弹窗里填 http(s) 地址就下载，否则按本地路径复制——两条路都落到实例目录的 .clicon.png。
+    private func presentCustomIconDialog() {
+        Task {
+            guard let input = await MessageBoxManager.shared.showIconDialogAsync(
+                title: "自定义图标",
+                preview: viewModel.iconImage ?? NSImage(named: defaultAssetName),
+                placeholder: "https://example.com"
+            ) else { return }
+            let trimmed: String = input.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            if let url = URL(string: trimmed),
+               let scheme = url.scheme?.lowercased(),
+               scheme.hasPrefix("http") {
+                do {
+                    let response = try await HTTPClient.shared.get(url, timeout: 20)
+                    guard (200..<300).contains(response.statusCode) else {
+                        throw SimpleError("返回 \(response.statusCode)")
+                    }
+                    guard NSImage(data: response.data) != nil else {
+                        throw SimpleError("返回的内容不是图片")
+                    }
+                    viewModel.setIcon(imageData: response.data)
+                } catch {
+                    err("从 URL 设置实例图标失败：\(error.localizedDescription)")
+                    hint("获取图标失败：\(error.localizedDescription)", type: .critical)
+                }
+            } else if FileManager.default.fileExists(atPath: trimmed) {
+                viewModel.setIcon(URL(fileURLWithPath: trimmed))
+            } else {
+                hint("请输入 http(s) 开头的图片地址，或点「选择本地图片」。", type: .critical)
+            }
         }
     }
 
