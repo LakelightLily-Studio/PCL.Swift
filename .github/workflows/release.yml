@@ -57,6 +57,15 @@ jobs:
           path: ./artifact
           merge-multiple: true
 
+      - name: Flatten artifact layout
+        run: |
+          set -euo pipefail
+          # build.yml 用 archive:false 上传，download-artifact 会再套一层同名目录
+          # （./artifact/PCL.Swift-artifact-arm64.zip/PCL.Swift-artifact-arm64.zip），
+          # 后面只认 ./artifact/<文件名>，这里先摊平。
+          find ./artifact -mindepth 2 -name '*.zip' -exec mv {} ./artifact/ \;
+          ls -l ./artifact
+
       - name: Package each architecture
         env:
           SIGN_APP: ${{ inputs.sign_app }}
