@@ -15,6 +15,8 @@ on:
 
 permissions:
   contents: write
+  # 取 artifact 的原始字节要读 Actions 的产物列表，光有 contents 会被 403。
+  actions: read
 
 jobs:
   build:
@@ -51,25 +53,46 @@ jobs:
           echo "TAG_NAME=v$VERSION_NUMBER" >> $GITHUB_ENV
 
       - name: Download artifacts
-        uses: actions/download-artifact@v8
-        with:
-          pattern: PCL.Swift-artifact-*.zip
-          path: ./artifact
-          # 不要 merge-multiple：两个架构的产物同名（PCL.Swift.app / build.xcarchive），
-          # 合并到同一层会互相覆盖。保持 ./artifact/<产物名>/ 各自一个目录。
-          merge-multiple: false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          # 绝对不能用 actions/download-artifact（或 gh run download）：它们用 Node / Go 的
+          # unzip 解包，会把框架里的 Versions/Current 符号链接写成普通文件，重新打包后
+          # 签名当场作废——2.2.0 的包就是这么坏的，用户更新后只看到「应用程序无法打开」。
+          # 这里直接取 artifact 的 zip 原始字节，再用 ditto 解，符号链接才保得住。
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.name | startswith("PCL.Swift-artifact-")) | "\(.id) \(.name)"' |
+          while read -r id name; do
+            echo "下载 $name（artifact $id）"
+            curl -sSL --fail \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -o "artifact/wrapper-$id.zip" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip"
+            # 每个架构解到自己那层目录：两个产物的内容同名（PCL.Swift.app / build.xcarchive），
+            # 解到同一层会互相覆盖。ditto 解出来的符号链接是完好的（已实测）。
+            mkdir -p "artifact/$name"
+            ditto -x -k "artifact/wrapper-$id.zip" "artifact/$name"
+            rm -f "artifact/wrapper-$id.zip"
+          done
+          ls -l artifact
 
       - name: Package each architecture
         env:
           SIGN_APP: ${{ inputs.sign_app }}
         run: |
           set -euo pipefail
-          # build.yml 用 archive:false 上传，download-artifact 下载时会把它解开，
-          # 所以这里直接拿解出来的 App，不要再 ditto -x（也拿不到 .zip 文件）。
           for arch in arm64 x86_64; do
             echo "::group::$arch"
+            # 上一步已经用 ditto 解到 ./artifact/<产物名>/ 下，这里直接用，别再解一次。
             app="./artifact/PCL.Swift-artifact-$arch.zip/PCL.Swift.app"
             test -d "$app" || { echo "::error::找不到 $app"; ls -R ./artifact | head -40; exit 1; }
+            # 守卫：框架里的 Current 必须是符号链接、签名必须验得过，否则这个包一定起不来。
+            test -L "$app/Contents/Frameworks/Core.framework/Versions/Current" || {
+              echo "::error::Core.framework/Versions/Current 不是符号链接，产物已损坏"; exit 1; }
+            codesign --verify --deep --strict "$app" || { echo "::error::签名校验失败"; exit 1; }
             echo "arch in bundle: $(lipo -archs "$app/Contents/MacOS/PCL.Swift")"
 
             if [ "$SIGN_APP" = "true" ]; then
