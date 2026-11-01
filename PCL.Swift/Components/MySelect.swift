@@ -24,13 +24,13 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
     @Binding private var selected: Entry
     
     private let entries: [Entry]
-    /// 条目图标：返回 Assets.xcassets 里 imageset 的名字，没有图标就返回 nil。
+    /// 条目图标：返回一张现成的 NSImage，没有图标就返回 nil。
     ///
-    /// 用字符串而不是 ImageResource：这里要按条目动态取图，而 ImageResource 的 name
-    /// 是 fileprivate，拼不出来；Image(name: String) 同样走资源目录，效果一致。
-    private let icon: ((Entry) -> String?)?
+    /// 用 NSImage 而不是 ImageResource：这里的图是运行时从云端拉的（实例图标），
+    /// 不在资源目录里；不传这个参数就是原来的纯文字下拉。
+    private let icon: ((Entry) -> NSImage?)?
     
-    init(_ selected: Binding<Entry>, entries: [Entry], icon: ((Entry) -> String?)? = nil) {
+    init(_ selected: Binding<Entry>, entries: [Entry], icon: ((Entry) -> NSImage?)? = nil) {
         self._selected = selected
         self.entries = entries
         self.icon = icon
@@ -77,8 +77,8 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
                 .allowsHitTesting(false)
             
             HStack(spacing: 6) {
-                if let iconName = icon?(selected) {
-                    Image(iconName)
+                if let image = icon?(selected) {
+                    Image(nsImage: image)
                         .resizable()
                         .interpolation(.high)
                         .scaledToFit()
@@ -183,13 +183,13 @@ private struct PopupView<Entry: Hashable & CustomStringConvertible>: View {
     @State private var hoveredEntry: Entry?
     private let entries: [Entry]
     private let selectedEntry: Entry
-    private let icon: ((Entry) -> String?)?
+    private let icon: ((Entry) -> NSImage?)?
     private let onSelect: (Entry) -> Void
     
     init(
         entries: [Entry],
         selectedEntry: Entry,
-        icon: ((Entry) -> String?)?,
+        icon: ((Entry) -> NSImage?)?,
         onSelect: @escaping (Entry) -> Void
     ) {
         self.entries = entries
@@ -208,8 +208,8 @@ private struct PopupView<Entry: Hashable & CustomStringConvertible>: View {
                     ForEach(entries, id: \.self) { entry in
                         Group {
                             HStack(spacing: 6) {
-                                if let iconName = icon?(entry) {
-                                    Image(iconName)
+                                if let image = icon?(entry) {
+                                    Image(nsImage: image)
                                         .resizable()
                                         .interpolation(.high)
                                         .scaledToFit()

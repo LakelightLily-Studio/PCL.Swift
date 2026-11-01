@@ -234,6 +234,32 @@ class InstanceOverviewViewModel: ObservableObject {
         }
     }
 
+    /// 从 URL 下载到的图片数据直接存成实例图标。
+    ///
+    /// 与「选本地图片」同一个落点（.clicon.png），区别只是数据来自网络。
+    func setIcon(imageData: Data) {
+        let destination: URL = instance.url.appending(path: ".clicon.png")
+        do {
+            if let old = instance.customIconURL, old != destination {
+                try? FileManager.default.removeItem(at: old)
+            }
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try imageData.write(to: destination)
+            instance.customIconURL = destination
+            // 从 URL 拿的图没有预设 id，下拉里据此显示「自定义…」。
+            instance.customIconName = nil
+            instance.markDirty()
+            save()
+            iconImage = Self.loadIcon(for: instance)
+            hint("图标已更新！", type: .finish)
+        } catch {
+            err("设置实例图标失败：\(error.localizedDescription)")
+            hint("设置实例图标失败：\(error.localizedDescription)", type: .critical)
+        }
+    }
+
     /// 清空自定义图标，回到按加载器推断的默认图标。
     func clearIcon() {
         if let old = instance.customIconURL {

@@ -612,12 +612,18 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
   它的 PNG 预渲染后放在 `dist-assets/about/`（该目录不参与 App 构建，别把它挪进 `Resources/` 或
   `PCL.Swift/`，否则会被同步组当成资源打进包里）。
 - **实例图标**（实例设置 → 概览 → 图标）走同一套：云端 `assets/icons/<id>.png`，
-  取图逻辑在 `Managers/InstanceIconStore.swift`（内存 → 磁盘图标缓存 → `Assets.xcassets/Icons/Instance` 的兜底图 → 云端）。
+  取图逻辑在 `Managers/InstanceIconStore.swift`（内存 → 磁盘图标缓存 → 云端）。
+  **App 里不打包这些图**：下拉列表只写死 id 与名字（`InstanceIconCatalog`），缩略图在进页面时
+  `preloadAll()` 一次性拉（一次 6 张），拉过的直接走内存 / 磁盘缓存、不重复请求，
+  只有本地那份丢了（清缓存 / 文件被删）才重新拉；选中预设图标时用同一份缓存写进实例目录。
   预设目录是 `InstanceIconCatalog`：顺序 = 默认（不在表里）→ 草方块 → 其余按创造模式物品栏的分类顺序 → 模组加载器。
   源图由 `Scripts/fetch-instance-icons.py` 从红河素材站（`https://honghemc.cn/app/`，
   1024×1024 透明 PNG）下载后统一缩到 256，产物放在 `dist-assets/icons/`，发版时由 publish-dist.sh 同步；
   四个模组加载器图标不是原版素材（取自 PCL2 与各自官网），不在脚本里。
-  **云端与打包两份都要留**：换图标不用发版，但断网时选择器不能是空的。
+  **不再有打包兜底**：断网时下拉里的预设图标是空的（只显示名字），这是刻意的——
+  少一份要同步的副本；加载器图标（默认那一项）仍是 App 自带的资源。
+  「自定义…」是模态弹窗（`InstanceIconCustomDialog`）：标题左边是实时预览，正文下面一行
+  输入框 + 「选择本地图片」，保存时按 http(s) 地址下载、否则按本地路径复制。
   换图后必须同时改 `InstanceIconStore.iconSetVersion`：云端路径不变，客户端按 URL 做磁盘缓存，
   不换版本号老用户会一直用旧图（`DomesticAssets.mirrors(for:cacheBust:)` 负责把版本拼进每条地址）。
 

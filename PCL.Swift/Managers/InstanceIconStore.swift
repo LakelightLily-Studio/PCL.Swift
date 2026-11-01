@@ -4,10 +4,11 @@
 //
 //  实例图标的预设目录与取图。
 //
-//  图标本身放在国内分发仓库的 assets/icons/<id>.png（换图不用发版），
-//  客户端按「内存 → 磁盘缓存 → 打包兜底 → 云端」的顺序取：
+//  图标本身放在国内分发仓库的 assets/icons/<id>.png（换图不用发版）。**App 里不打包这些图**：
+//  列表只写死 id 与名字，缩略图统一从云端拉，拿到之后按「内存 → 磁盘缓存」留着，
+//  下次不再重复请求——除非本地那份丢了（缓存被清、文件被删）才重新拉。
 //  · 磁盘那层就是设置 → 其他 → 缓存里的「图标缓存」，开着才落盘；
-//  · 打包兜底是 Assets.xcassets/Icons/Instance 里的同一张图，断网时选择器不会是空的。
+//  · 一次拉 6 个，27 个图标四批拉完，不把 GitCode 打满。
 //
 //  顺序：默认 → 草方块 → 其余按创造模式物品栏的顺序（建筑方块 → 自然方块 → 功能方块
 //  → 工具与实用物品 → 战斗 → 食物与饮品 → 原材料），最后是四个模组加载器的图标。
@@ -18,62 +19,22 @@ import AppKit
 import Core
 
 /// 一个预设图标。
+///
+/// 只有 id 与名字：图是运行时从云端拉的，不打包进 App。
 struct InstancePresetIcon: Identifiable, Hashable {
     /// 仓库里的文件名（不含扩展名），也是选中后写进元数据的 id。
     let id: String
-    /// 选择器里显示的名字。
+    /// 下拉里显示的名字。
     let name: String
-
-    /// 打包在 App 里的兜底图（Assets.xcassets/Icons/Instance 里 imageset 的名字）。
-    ///
-    /// 这里存字符串而不是 ImageResource：同一张图既要在 SwiftUI 里显示（Image(_:)），
-    /// 又要在选中时转成 NSImage 写进实例目录（NSImage(named:)），而 ImageResource 的
-    /// name 是 fileprivate，取不出来。名字全部集中在这个 switch 里，加图标只改这一处。
-    var asset: String {
-        switch id {
-        case "grass_block": "iconInstanceGrassBlock"
-        case "stone": "iconInstanceStone"
-        case "mossy_cobblestone": "iconInstanceMossyCobblestone"
-        case "iron_block": "iconInstanceIronBlock"
-        case "gold_block": "iconInstanceGoldBlock"
-        case "diamond_block": "iconInstanceDiamondBlock"
-        case "nether_wart_block": "iconInstanceNetherWartBlock"
-        case "oak_sapling": "iconInstanceOakSapling"
-        case "crafting_table": "iconInstanceCraftingTable"
-        case "furnace": "iconInstanceFurnace"
-        case "anvil": "iconInstanceAnvil"
-        case "item_frame": "iconInstanceItemFrame"
-        case "iron_pickaxe": "iconInstanceIronPickaxe"
-        case "water_bucket": "iconInstanceWaterBucket"
-        case "diamond_sword": "iconInstanceDiamondSword"
-        case "totem_of_undying": "iconInstanceTotemOfUndying"
-        case "bread": "iconInstanceBread"
-        case "carrot": "iconInstanceCarrot"
-        case "cooked_porkchop": "iconInstanceCookedPorkchop"
-        case "golden_apple": "iconInstanceGoldenApple"
-        case "potion": "iconInstancePotion"
-        case "paper": "iconInstancePaper"
-        case "egg": "iconInstanceEgg"
-        case "neoforge": "iconInstanceNeoForge"
-        case "fabric": "iconInstanceFabric"
-        case "quilt": "iconInstanceQuilt"
-        case "optifine": "iconInstanceOptiFine"
-        default: "iconGrassBlock"
-        }
-    }
 }
 
-
 /// 图标下拉里的一个选项。
-///
-/// 选择器是一个普通的下拉框（MySelect），不是弹窗：打开时只显示打包在 App 里的图标，
-/// **选中哪一个才去云端取哪一个**，不会一打开就把 27 张全拉下来。
 enum InstanceIconChoice: Hashable, CustomStringConvertible {
     /// 按加载器自动推导（没有加载器就是草方块）。
     case automatic
     /// 预设图标。
     case preset(InstancePresetIcon)
-    /// 自己挑一张图片。
+    /// 自己填 URL 或挑一张本地图片。
     case custom
 
     var description: String {
@@ -127,8 +88,10 @@ enum InstanceIconCatalog {
 }
 
 /// 实例图标的取图与缓存。
+///
+/// 是个 ObservableObject：缩略图是异步拉回来的，页面靠它刷新下拉里的图。
 @MainActor
-final class InstanceIconStore {
+final class InstanceIconStore: ObservableObject {
     static let shared: InstanceIconStore = .init()
 
     /// 图标集的版本号。
@@ -138,32 +101,52 @@ final class InstanceIconStore {
     /// 改这里的同时记得把新图推到国内仓库（Scripts/publish-dist.sh）。
     static let iconSetVersion: String = "20261101"
 
-    /// 本次会话已经拿到的图（云端那份，或磁盘缓存里那份）。
-    private var memory: [String: NSImage] = [:]
+    /// 已经拿到的缩略图（内存层）。键是图标的 id。
+    @Published private(set) var images: [String: NSImage] = [:]
     /// 拉取失败的时间戳，5 分钟内不再重试（与「更多」页头像同一套策略）。
     private var failed: [String: Date] = [:]
     private let retryInterval: TimeInterval = 300
+    /// 正在拉的图标，避免同一张图并发拉两次。
+    private var loading: Set<String> = []
 
     private init() {}
 
-    /// 立刻能显示的那份：内存 → 磁盘缓存 → 打包兜底。
-    func immediateImage(for icon: InstancePresetIcon) -> NSImage? {
-        if let image = memory[icon.id] { return image }
-        if let key = cacheKey(for: icon), let cached = ResourceCacheCenter.shared.image(for: key) {
-            memory[icon.id] = cached
-            return cached
-        }
-        return NSImage(named: icon.asset)
+    /// 内存里那张（磁盘那份在 load 里翻）。
+    func image(for icon: InstancePresetIcon) -> NSImage? {
+        images[icon.id]
     }
 
-    /// 去云端要一份新的。拿到就更新内存并落盘（开关关掉时只留内存）。
-    /// - Returns: 是否拿到了新图。
-    @discardableResult
-    func refresh(_ icon: InstancePresetIcon) async -> Bool {
-        guard shouldRetry(icon) else { return false }
-        let path: String = DomesticAssets.instanceIconPath(icon.id)
-        guard let key = cacheKey(for: icon) else { return false }
+    /// 一次性把所有缩略图拉到本地。
+    ///
+    /// 已经在内存 / 磁盘缓存里的直接跳过，所以反复进出页面不会重复请求；
+    /// 只有本地那份真的丢了（清缓存、文件被删）才会重新拉。
+    func preloadAll() async {
+        let missing: [InstancePresetIcon] = InstanceIconCatalog.presets.filter { images[$0.id] == nil }
+        guard !missing.isEmpty else { return }
+        // 一次 6 个：27 张图四批就够，别把 GitCode 打满。
+        for start in stride(from: 0, to: missing.count, by: 6) {
+            let batch: [InstancePresetIcon] = Array(missing[start..<min(start + 6, missing.count)])
+            await withTaskGroup(of: Void.self) { group in
+                for icon in batch {
+                    group.addTask { await self.load(icon) }
+                }
+            }
+        }
+    }
 
+    /// 拿一张图：内存 → 磁盘缓存 → 云端。已有的不再请求。
+    func load(_ icon: InstancePresetIcon) async {
+        if images[icon.id] != nil { return }
+        let key: String? = cacheKey(for: icon)
+        if let key, let cached = ResourceCacheCenter.shared.image(for: key) {
+            images[icon.id] = cached
+            return
+        }
+        guard shouldRetry(icon), !loading.contains(icon.id) else { return }
+        loading.insert(icon.id)
+        defer { loading.remove(icon.id) }
+
+        let path: String = DomesticAssets.instanceIconPath(icon.id)
         for url in DomesticAssets.mirrors(for: path, cacheBust: Self.iconSetVersion) {
             do {
                 let response = try await HTTPClient.shared.get(url, timeout: 15)
@@ -173,26 +156,29 @@ final class InstanceIconStore {
                 guard let image = NSImage(data: response.data) else {
                     throw SimpleError("解码图片失败")
                 }
-                memory[icon.id] = image
+                images[icon.id] = image
                 failed.removeValue(forKey: icon.id)
-                ResourceCacheCenter.shared.store(image, for: key)
-                return true
+                if let key {
+                    ResourceCacheCenter.shared.store(image, for: key)
+                }
+                return
             } catch let error where error.isCancellationError {
-                return false
+                return
             } catch {
                 warn("加载实例图标失败 \(url.host ?? "?")：\(error.localizedDescription)")
             }
         }
         failed[icon.id] = Date()
-        return false
     }
 
-    /// 选中某个预设图标时，把它写进实例目录要用的那张图。
-    /// 云端优先，拿不到就退回打包的那份，保证离线也能换图标。
+    /// 选中某个预设图标时，写进实例目录要用的那张图。
+    ///
+    /// 本地已有（内存 / 磁盘）就直接用；没有才去云端要——**不再有打包兜底**，
+    /// 拿不到就返回 nil，由调用方提示失败。
     func imageForSaving(_ icon: InstancePresetIcon) async -> NSImage? {
-        if let image = memory[icon.id] { return image }
-        _ = await refresh(icon)
-        return memory[icon.id] ?? immediateImage(for: icon)
+        if let image = images[icon.id] { return image }
+        await load(icon)
+        return images[icon.id]
     }
 
     private func cacheKey(for icon: InstancePresetIcon) -> String? {

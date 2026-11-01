@@ -12,6 +12,10 @@ import Core
 
 struct InstanceOverviewPage: View {
     @StateObject private var viewModel: InstanceOverviewViewModel
+    /// 预设图标的缩略图：进页面就一次性从云端拉，之后走内存 / 磁盘缓存。
+    @ObservedObject private var iconStore: InstanceIconStore = .shared
+    /// 「自定义…」的模态弹窗。
+    @State private var showingCustomDialog: Bool = false
 
     init(instanceManager: InstanceManager, id: String) {
         self._viewModel = .init(wrappedValue: .init(instanceManager: instanceManager, id: id))
@@ -26,6 +30,13 @@ struct InstanceOverviewPage: View {
                 .cardIndex(2)
             managementCard
                 .cardIndex(3)
+        }
+        // 缩略图一次性拉全：拉过的（内存 / 磁盘缓存里有）会直接跳过。
+        .task { await iconStore.preloadAll() }
+        .sheet(isPresented: $showingCustomDialog) {
+            InstanceIconCustomDialog(viewModel: viewModel) {
+                showingCustomDialog = false
+            }
         }
     }
 
@@ -79,43 +90,32 @@ struct InstanceOverviewPage: View {
                 case .automatic:
                     viewModel.clearIcon()
                 case .preset(let icon):
-                    // 选中哪一个才去云端取哪一个（内存 → 磁盘缓存 → 云端 → 打包兜底）。
+                    // 缩略图早就跟着 preloadAll 拉过了；这里只是把那张图写进实例目录。
                     Task { await viewModel.setIcon(icon) }
                 case .custom:
-                    chooseIcon()
+                    showingCustomDialog = true
                 }
             }
         )
     }
 
-    /// 下拉每一行的图标：默认按实例的加载器推导，其余用各自打包的内置图。
-    private func iconName(for choice: InstanceIconChoice) -> String? {
+    /// 下拉每一行的图标。
+    ///
+    /// 「默认」用 App 里自带的加载器图标（那是启动器自己的资源，不走云端）；
+    /// 预设图标用 InstanceIconStore 里已经拉下来的缩略图，还没拉到就先留空。
+    private func iconImage(for choice: InstanceIconChoice) -> NSImage? {
         switch choice {
         case .automatic:
             switch viewModel.instance.modLoader {
-            case .fabric: "iconFabric"
-            case .forge: "iconForge"
-            case .neoforge: "iconNeoforge"
-            case nil: "iconGrassBlock"
+            case .fabric: NSImage(named: "iconFabric")
+            case .forge: NSImage(named: "iconForge")
+            case .neoforge: NSImage(named: "iconNeoforge")
+            case nil: NSImage(named: "iconGrassBlock")
             }
         case .preset(let icon):
-            icon.asset
+            iconStore.image(for: icon)
         case .custom:
-            nil
-        }
-    }
-
-    /// 自定义图片：选完直接把文件复制进实例目录。
-    private func chooseIcon() {
-        let panel: NSOpenPanel = .init()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.png, .jpeg]
-        panel.title = "选择实例图标"
-        panel.begin { result in
-            guard result == .OK, let url = panel.url else { return }
-            viewModel.setIcon(url)
+            viewModel.iconImage
         }
     }
 
@@ -126,9 +126,9 @@ struct InstanceOverviewPage: View {
             VStack(alignment: .leading, spacing: 12) {
                 SettingRow("图标", labelWidth: 80) {
                     // 和原版一样是个下拉框：默认 / 各预设图标 / 自定义…。
-                    // 下拉里只显示打包在 App 里的那张图，**选中哪一个才去云端取哪一个**，
-                    // 不是打开就一口气拉 27 张。
-                    MySelect(iconBinding, entries: iconChoices, icon: iconName(for:))
+                    // 列表本身写死在 InstanceIconCatalog 里，缩略图由 InstanceIconStore
+                    // 一次性从云端拉下来（App 里不再打包这些图）。
+                    MySelect(iconBinding, entries: iconChoices, icon: iconImage(for:))
                         .frame(maxWidth: .infinity)
                 }
                 SettingRow("分类", labelWidth: 80) {
