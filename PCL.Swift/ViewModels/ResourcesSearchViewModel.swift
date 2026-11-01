@@ -125,13 +125,25 @@ class ResourcesSearchViewModel: ObservableObject {
         try await search(query, pageIndex: page)
     }
     
+    /// 类别标签的会话级缓存：type.rawValue → 名字列表。
+    ///
+    /// /v2/tag/category 是一份 55KB 的全量 JSON（国内 1.5s 左右），而它几乎不变；
+    /// 每进一次页面就重拉一遍完全是浪费，这里按类型缓存到本次会话结束。
+    @MainActor private static var categoryCache: [String: [String]] = [:]
+
     /// 拉取该类型的类别标签。失败只记日志：筛选项空着不影响搜索本身。
     public func loadCategories() async {
         guard categories.isEmpty else { return }
+        let key: String = type.rawValue
+        if let cached = await MainActor.run(body: { Self.categoryCache[key] }) {
+            await MainActor.run { self.categories = cached }
+            return
+        }
         do {
             let all: [ModrinthAPIClient.Category] = try await ModrinthAPIClient.shared.categories()
-            let names: [String] = all.filter { $0.projectType == type.rawValue }.map(\.name)
+            let names: [String] = all.filter { $0.projectType == key }.map(\.name)
             await MainActor.run {
+                Self.categoryCache[key] = names
                 self.categories = names
             }
         } catch let error where error.isCancellationError {

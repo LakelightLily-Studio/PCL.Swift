@@ -74,10 +74,14 @@ struct ResourcesSearchPage: View {
             }
         }
         .task {
-            await viewModel.loadCategories()
+            // 两件事互不依赖：类别只用来填「类型」下拉，搜索本身不需要它。
+            // 早先是 await loadCategories() 之后才发起搜索，首屏白等一个
+            // /v2/tag/category 的往返（国内 1.5s 左右），再等搜索本身的 1.5s。
+            async let categories: Void = viewModel.loadCategories()
             if lastRequestedPage == nil {
                 requestSearch(page: 0)
             }
+            await categories
         }
         // 侧边栏条目的「刷新」：用当前界面上的条件重新搜一次，并回到第一页
         // （原版 PageDownloadLeft 的 Refresh 就是这个行为）。
