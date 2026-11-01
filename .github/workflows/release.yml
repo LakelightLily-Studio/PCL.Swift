@@ -55,30 +55,21 @@ jobs:
         with:
           pattern: PCL.Swift-artifact-*.zip
           path: ./artifact
-          merge-multiple: true
-
-      - name: Flatten artifact layout
-        run: |
-          set -euo pipefail
-          # build.yml 用 archive:false 上传，download-artifact 会再套一层同名目录
-          # （./artifact/PCL.Swift-artifact-arm64.zip/PCL.Swift-artifact-arm64.zip），
-          # 后面只认 ./artifact/<文件名>，这里先摊平。
-          find ./artifact -mindepth 2 -name '*.zip' -exec mv {} ./artifact/ \;
-          ls -l ./artifact
+          # 不要 merge-multiple：两个架构的产物同名（PCL.Swift.app / build.xcarchive），
+          # 合并到同一层会互相覆盖。保持 ./artifact/<产物名>/ 各自一个目录。
+          merge-multiple: false
 
       - name: Package each architecture
         env:
           SIGN_APP: ${{ inputs.sign_app }}
         run: |
           set -euo pipefail
-          # 解压必须用 ditto：它保留框架里的 Versions/Current 符号链接，
-          # 用普通 unzip 会把链接解成普通文件，签名当场作废。
+          # build.yml 用 archive:false 上传，download-artifact 下载时会把它解开，
+          # 所以这里直接拿解出来的 App，不要再 ditto -x（也拿不到 .zip 文件）。
           for arch in arm64 x86_64; do
             echo "::group::$arch"
-            work="work-$arch"
-            rm -rf "$work"
-            ditto -x -k "./artifact/PCL.Swift-artifact-$arch.zip" "$work"
-            app="$work/PCL.Swift.app"
+            app="./artifact/PCL.Swift-artifact-$arch.zip/PCL.Swift.app"
+            test -d "$app" || { echo "::error::找不到 $app"; ls -R ./artifact | head -40; exit 1; }
             echo "arch in bundle: $(lipo -archs "$app/Contents/MacOS/PCL.Swift")"
 
             if [ "$SIGN_APP" = "true" ]; then
