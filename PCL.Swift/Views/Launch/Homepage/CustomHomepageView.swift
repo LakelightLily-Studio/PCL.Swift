@@ -331,7 +331,7 @@ struct HomepageDocumentView: View {
     }
 
     private func switchPage(_ index: Int) {
-        let routes: [AppRoute] = [.launch, .download, .multiplayer, .settings, .more]
+        let routes: [AppRoute] = [.launch, .download, .settings, .more]
         guard routes.indices.contains(index) else { return }
         AppRouter.shared.setRoot(routes[index])
     }

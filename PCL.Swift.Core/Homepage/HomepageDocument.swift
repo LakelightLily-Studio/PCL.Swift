@@ -40,7 +40,7 @@ public enum HomepageEvent: Equatable {
     case help(String)
     /// 启动指定实例。
     case launch(String)
-    /// 切换顶栏页面（0 启动 / 1 下载 / 2 联机 / 3 设置 / 4 更多）。
+    /// 切换顶栏页面（0 启动 / 1 下载 / 2 设置 / 3 更多）。
     case switchPage(Int)
     /// 修改变量：页面内的 {variable:...} 与 Visibility 条件都用它。
     case setVariable(name: String, value: String)

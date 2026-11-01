@@ -61,7 +61,7 @@ enum PageExit {
 /// - 有（下载 / 设置 / 更多 / 版本选择 / 版本设置）→ 逐条目退场：
 ///   50ms 淡出 + 50ms 左移 6pt，整列共用 70ms 的错峰窗口
 ///   （`Delay = 70 / Controls.Count * Id`）。
-/// - 没有（启动 / 任务管理 / 联机）→ 整块退场：
+/// - 没有（启动 / 任务管理）→ 整块退场：
 ///   110ms 缩到 0.95（AniEaseInFluent(Weak)，即 t²），同时 80ms 淡出、延迟 30ms。
 enum SidebarExit {
     /// 逐条目退场：单条目淡出时长。

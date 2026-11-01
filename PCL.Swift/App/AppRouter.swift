@@ -10,7 +10,7 @@ import Core
 
 enum AppRoute: Identifiable, Hashable, Equatable {
     // 根页面
-    case launch, download, multiplayer, settings, more, tasks
+    case launch, download, settings, more, tasks
     
     // 启动页面的子页面
     case instanceList(repositoryId: UUID), instanceSettings(id: String)
@@ -26,8 +26,6 @@ enum AppRoute: Identifiable, Hashable, Equatable {
     case minecraftDownload, minecraftInstallOptions(version: VersionManifest.Version), modDownload, resourcepackDownload, shaderpackDownload, modpackDownload, datapackDownload
     case projectInstall(project: ProjectListItemModel)
     
-    // 联机页面的子页面
-    case multiplayerSub, multiplayerSettings
     
     // 设置页面的子页面
     case personalizationSettings, gameSettings, launcherSettings
@@ -80,20 +78,15 @@ class AppRouter: ObservableObject {
     
     func setRoot(_ newRoot: AppRoute) {
         var newRoot: AppRoute = newRoot
-        // 关掉联机开关后不允许再进入联机页：把路由请求改写回启动页，
-        // 否则该开关只能隐藏入口，页面依旧可达。
-        if !isRouteAvailable(newRoot) { newRoot = .launch }
         path = [newRoot]
         // 各根页面的默认子页面
         if newRoot == .download { append(.minecraftDownload) }
-        if newRoot == .multiplayer { append(.multiplayerSub) }
         // 设置页的首个条目是「启动」（原「游戏」页），进入设置就落在它上面。
         if newRoot == .settings { append(.gameSettings) }
         if newRoot == .more { append(.about) }
     }
     
     func append(_ route: AppRoute) {
-        guard isRouteAvailable(route) else { return }
         path.append(route)
         // 进入版本设置时先落在「概览」，与 PCL2 一致；设置页要自己点过去。
         if case .instanceSettings(let id) = route { append(.instanceOverview(id: id)) }
@@ -126,22 +119,6 @@ class AppRouter: ObservableObject {
             newPath.removeLast()
         }
         path = newPath
-    }
-    
-    /// 该路由在当前功能开关下是否可用。
-    func isRouteAvailable(_ route: AppRoute) -> Bool {
-        switch route {
-        case .multiplayer, .multiplayerSub, .multiplayerSettings:
-            return FlagsManager.shared.isEnabled(.multiplayer)
-        default:
-            return true
-        }
-    }
-
-    /// 开关被关闭时，把停在联机页的会话退回启动页。
-    func enforceFlagGates() {
-        guard !isRouteAvailable(last) else { return }
-        setRoot(.launch)
     }
     
     private init() {}
@@ -206,10 +183,6 @@ struct AppRouterView: View {
         case .instanceList(let repositoryId):
             InstanceListPage(instanceManager: instanceManager, repositoryId: repositoryId)
                 .id(repositoryId)
-        case .multiplayerSub:
-            MultiplayerPage()
-        case .multiplayerSettings:
-            MultiplayerSettingsPage()
         case .personalizationSettings:
             PersonalizationSettingsPage()
         case .gameSettings:
@@ -290,7 +263,6 @@ struct AppSidebarView: View {
              .instanceOverview, .instanceExport: InstanceSettingsSidebar.widthConstant
         case .minecraftDownload, .modDownload, .resourcepackDownload, .shaderpackDownload,
              .modpackDownload, .datapackDownload: DownloadSidebar.widthConstant
-        case .multiplayer, .multiplayerSub, .multiplayerSettings: MultiplayerSidebar.widthConstant
         case .settings, .personalizationSettings, .gameSettings, .launcherSettings: SettingsSidebar.widthConstant
         case .more, .about, .toolbox: MoreSidebar.widthConstant
         case .tasks: TasksSidebar.widthConstant
@@ -374,8 +346,6 @@ struct AppSidebarView: View {
         case .minecraftDownload, .modDownload, .resourcepackDownload, .shaderpackDownload,
              .modpackDownload, .datapackDownload:
             DownloadSidebar()
-        case .multiplayer, .multiplayerSub, .multiplayerSettings:
-            MultiplayerSidebar()
         case .settings, .personalizationSettings, .gameSettings, .launcherSettings:
             SettingsSidebar()
         case .more, .about, .toolbox:

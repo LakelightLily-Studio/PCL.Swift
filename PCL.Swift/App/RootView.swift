@@ -48,7 +48,6 @@ struct RootView: View {
             .frame(minWidth: AppWindow.launcherMinSize.width, minHeight: AppWindow.launcherMinSize.height)
             .environmentObject(instanceManager)
             .environmentObject(MinecraftDownloadPageViewModel())
-            .environmentObject(MultiplayerViewModel())
             .environmentObject(CardInteractionState.shared)
     }
 }

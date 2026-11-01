@@ -200,7 +200,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             LauncherConfig.shared.enabledFlags = FlagsManager.shared.enabledFlags
             LauncherConfig.flush()
         }
-        EasyTierManager.shared.terminateAll()
     }
     
     private func addEscapeMonitor() {

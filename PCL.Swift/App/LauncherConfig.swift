@@ -64,9 +64,6 @@ class LauncherConfig: Codable {
     public var currentAccountId: UUID? {
         didSet { LauncherConfig.markDirty() }
     }
-    public var multiplayerDisclaimerAgreed: Bool = false {
-        didSet { LauncherConfig.markDirty() }
-    }
     public var hasMicrosoftAccount: Bool = false {
         didSet { LauncherConfig.markDirty() }
     }
@@ -82,9 +79,6 @@ class LauncherConfig: Codable {
     /// 开场流程"。旧配置里没有这个键时会解码为 false，于是升级后的第一次
     /// 启动仍会播一遍开场动画，这正是期望的行为。
     public var hasCompletedOnboarding: Bool = false {
-        didSet { LauncherConfig.markDirty() }
-    }
-    public var multiplayerCustomPeer: String? {
         didSet { LauncherConfig.markDirty() }
     }
     public var ignoreLauncherUpdates: Bool = false {
@@ -358,12 +352,10 @@ class LauncherConfig: Codable {
                 self.currentAccountId = accounts[0].id
             }
         }
-        self.multiplayerDisclaimerAgreed = try container.decodeIfPresent(Bool.self, forKey: .multiplayerDisclaimerAgreed) ?? false
         self.hasMicrosoftAccount = try container.decodeIfPresent(Bool.self, forKey: .hasMicrosoftAccount) ?? false
         self.launchCount = try container.decodeIfPresent(Int.self, forKey: .launchCount) ?? 0
         self.hasEnteredLauncher = try container.decodeIfPresent(Bool.self, forKey: .hasEnteredLauncher) ?? false
         self.hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
-        self.multiplayerCustomPeer = try container.decodeIfPresent(String.self, forKey: .multiplayerCustomPeer)
         self.ignoreLauncherUpdates = try container.decodeIfPresent(Bool.self, forKey: .ignoreLauncherUpdates) ?? false
         self.downloadSourcePolicy = try container.decodeIfPresent(DownloadSourcePolicy.self, forKey: .downloadSourcePolicy) ?? .officialFirst
         // 缺这个键的配置按默认主页处理（预设 → PCL.Swift 更新日志）。
@@ -430,12 +422,10 @@ class LauncherConfig: Codable {
         try container.encode(currentRepositoryId, forKey: .currentRepositoryId)
         try container.encode(accounts.map(AccountWrapper.init(_:)), forKey: .accounts)
         try container.encode(currentAccountId, forKey: .currentAccountId)
-        try container.encode(multiplayerDisclaimerAgreed, forKey: .multiplayerDisclaimerAgreed)
         try container.encode(hasMicrosoftAccount, forKey: .hasMicrosoftAccount)
         try container.encode(launchCount, forKey: .launchCount)
         try container.encode(hasEnteredLauncher, forKey: .hasEnteredLauncher)
         try container.encode(hasCompletedOnboarding, forKey: .hasCompletedOnboarding)
-        try container.encode(multiplayerCustomPeer, forKey: .multiplayerCustomPeer)
         try container.encode(ignoreLauncherUpdates, forKey: .ignoreLauncherUpdates)
         try container.encode(downloadSourcePolicy, forKey: .downloadSourcePolicy)
         try container.encode(homepageType, forKey: .homepageType)
@@ -533,12 +523,10 @@ class LauncherConfig: Codable {
         case currentRepositoryId
         case accounts
         case currentAccountId
-        case multiplayerDisclaimerAgreed
         case hasMicrosoftAccount
         case launchCount
         case hasEnteredLauncher
         case hasCompletedOnboarding
-        case multiplayerCustomPeer
         case ignoreLauncherUpdates
         case downloadSourcePolicy
         case homepageType

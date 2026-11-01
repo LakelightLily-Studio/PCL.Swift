@@ -26,8 +26,6 @@ enum DevShortcuts {
 
     /// 数字键 1–4 对应的根页面，顺序与顶栏按钮一致。
     ///
-    /// 联机页不列进来：它由功能开关控制，关闭时按钮本身不存在、打开时插在「设置」
-    /// 之前，让它占用数字键会让同一个键在不同开关状态下跳到不同页面。
     static let rootPages: [AppRoute] = [.launch, .download, .settings, .more]
 
     /// 数字键 1–4 的 keyCode（ANSI 键盘），顺序即 rootPages 的下标。

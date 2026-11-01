@@ -21,8 +21,7 @@ class FlagsManager: ObservableObject {
     }
 
     public static func install(_ instance: FlagsManager) {
-        // 先发布实例再应用开关：`applyChange` 可能回调到读取 `shared` 的地方
-        // （例如关闭联机开关时让路由退出联机页）。
+        // 先发布实例再应用开关：`applyChange` 可能回调到读取 `shared` 的地方。
         _shared = instance
         instance.applyAllFlags()
     }
@@ -74,18 +73,10 @@ class FlagsManager: ObservableObject {
         switch flag {
         case .deduplicateLibraries:
             ClientManifest.deduplicateLibraries = enabled
-        case .multiplayer:
-            // 联机页的门禁由 AppRouter.isRouteAvailable(_:) 读取开关状态；
-            // 这里在开关变化时立刻把停在联机页的会话退出去。
-            // AppRouter 属于主线程隔离，切开关可能来自任意线程，因此显式跳一次。
-            Task { @MainActor in
-                AppRouter.shared.enforceFlagGates()
-            }
         }
     }
 }
 
 enum FeatureFlag: String, Codable, CaseIterable {
     case deduplicateLibraries
-    case multiplayer
 }
