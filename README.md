@@ -38,7 +38,6 @@ PCL.Swift 是 [Plain Craft Launcher](https://github.com/Meloong-Git/PCL)（由 [
 - **单例改为显式注入**：`JavaManager` / `DownloadSourceManager` / `ResourceCache` / `VersionManifest` / `FlagsManager` 全部走 `install(_:)` + `shared`，未注入时给出可定位的 `fatalError`，取代原先的 `!` 隐式解包——把一个随机崩溃点变成一行明确的错误信息。
 - **错误处理分层**：公开 API 用 `throws(SomeError)` 收窄错误类型，就地失败用 `SimpleError`，`try?` 只留给确有降级路径的场景；全仓库不再有空 `catch {}`。
 - **主线程调度统一**：新代码一律 `@MainActor`，只有并发标注够不着的回调边界才退回 `DispatchQueue.main.async`。
-- **功能开关真正生效**：此前关闭联机开关只是隐藏入口，页面仍可通过路由抵达；现在由 `AppRouter.isRouteAvailable(_:)` 统一拦截，开关关闭时会主动把会话退回启动页。
 - **ATS 不再全局放行**：Debug 与 Release 都不再整包关闭 App Transport Security，改为只对必要的域名开例外。
 - **CI 真正跑测试**：PR 与 `main` 的推送都会执行 `xcodebuild test`，此前工作流只构建不测试。
 - **设置行与字节格式化去重**：抽成 `SettingRow` 与 `ByteFormat`，两处重复实现合并为一处。
