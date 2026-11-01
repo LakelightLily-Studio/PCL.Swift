@@ -24,10 +24,16 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
     @Binding private var selected: Entry
     
     private let entries: [Entry]
+    /// 条目图标：返回 Assets.xcassets 里 imageset 的名字，没有图标就返回 nil。
+    ///
+    /// 用字符串而不是 ImageResource：这里要按条目动态取图，而 ImageResource 的 name
+    /// 是 fileprivate，拼不出来；Image(name: String) 同样走资源目录，效果一致。
+    private let icon: ((Entry) -> String?)?
     
-    init(_ selected: Binding<Entry>, entries: [Entry]) {
+    init(_ selected: Binding<Entry>, entries: [Entry], icon: ((Entry) -> String?)? = nil) {
         self._selected = selected
         self.entries = entries
+        self.icon = icon
     }
     
     var body: some View {
@@ -70,7 +76,15 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
                 }
                 .allowsHitTesting(false)
             
-            HStack {
+            HStack(spacing: 6) {
+                if let iconName = icon?(selected) {
+                    Image(iconName)
+                        .resizable()
+                        .interpolation(.none)
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                        .padding(.leading, 2)
+                }
                 MyText(selected.description)
                 
                 Spacer(minLength: 0)
@@ -96,7 +110,11 @@ struct MySelect<Entry: Hashable & CustomStringConvertible>: View {
         .onChange(of: presented) { newValue in
             close()
             if newValue {
-                let hostingView = NSHostingView(rootView: PopupView(entries: entries, selectedEntry: selected) { entry in
+                let hostingView = NSHostingView(rootView: PopupView(
+                    entries: entries,
+                    selectedEntry: selected,
+                    icon: icon
+                ) { entry in
                     selected = entry
                     presented = false
                     close()
@@ -165,11 +183,18 @@ private struct PopupView<Entry: Hashable & CustomStringConvertible>: View {
     @State private var hoveredEntry: Entry?
     private let entries: [Entry]
     private let selectedEntry: Entry
+    private let icon: ((Entry) -> String?)?
     private let onSelect: (Entry) -> Void
     
-    init(entries: [Entry], selectedEntry: Entry, onSelect: @escaping (Entry) -> Void) {
+    init(
+        entries: [Entry],
+        selectedEntry: Entry,
+        icon: ((Entry) -> String?)?,
+        onSelect: @escaping (Entry) -> Void
+    ) {
         self.entries = entries
         self.selectedEntry = selectedEntry
+        self.icon = icon
         self.onSelect = onSelect
     }
     
@@ -182,8 +207,17 @@ private struct PopupView<Entry: Hashable & CustomStringConvertible>: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(entries, id: \.self) { entry in
                         Group {
-                            MyText(entry.description)
-                                .padding(.leading, 6)
+                            HStack(spacing: 6) {
+                                if let iconName = icon?(entry) {
+                                    Image(iconName)
+                                        .resizable()
+                                        .interpolation(.none)
+                                        .scaledToFit()
+                                        .frame(width: 16, height: 16)
+                                }
+                                MyText(entry.description)
+                            }
+                            .padding(.leading, 6)
                         }
                         .frame(height: 26)
                         .frame(maxWidth: .infinity, alignment: .leading)

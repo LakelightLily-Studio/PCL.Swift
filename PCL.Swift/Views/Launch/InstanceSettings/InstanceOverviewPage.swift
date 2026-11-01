@@ -12,7 +12,6 @@ import Core
 
 struct InstanceOverviewPage: View {
     @StateObject private var viewModel: InstanceOverviewViewModel
-    @State private var showingIconPicker: Bool = false
 
     init(instanceManager: InstanceManager, id: String) {
         self._viewModel = .init(wrappedValue: .init(instanceManager: instanceManager, id: id))
@@ -27,9 +26,6 @@ struct InstanceOverviewPage: View {
                 .cardIndex(2)
             managementCard
                 .cardIndex(3)
-        }
-        .sheet(isPresented: $showingIconPicker) {
-            InstanceIconPicker(viewModel: viewModel)
         }
     }
 
@@ -61,21 +57,79 @@ struct InstanceOverviewPage: View {
         return .fallback
     }
 
+    // MARK: - 图标选择
+
+    /// 下拉里的全部选项：默认 → 27 个预设（草方块第二）→ 自定义…
+    private var iconChoices: [InstanceIconChoice] {
+        [.automatic] + InstanceIconCatalog.presets.map { .preset($0) } + [.custom]
+    }
+
+    /// 当前选中项。来源只有一个：实例元数据里的 customIconURL / customIconName。
+    private var iconBinding: Binding<InstanceIconChoice> {
+        .init(
+            get: {
+                if let name = viewModel.instance.customIconName,
+                   let preset = InstanceIconCatalog.icon(id: name) {
+                    return .preset(preset)
+                }
+                return viewModel.instance.customIconURL == nil ? .automatic : .custom
+            },
+            set: { choice in
+                switch choice {
+                case .automatic:
+                    viewModel.clearIcon()
+                case .preset(let icon):
+                    // 选中哪一个才去云端取哪一个（内存 → 磁盘缓存 → 云端 → 打包兜底）。
+                    Task { await viewModel.setIcon(icon) }
+                case .custom:
+                    chooseIcon()
+                }
+            }
+        )
+    }
+
+    /// 下拉每一行的图标：默认按实例的加载器推导，其余用各自打包的内置图。
+    private func iconName(for choice: InstanceIconChoice) -> String? {
+        switch choice {
+        case .automatic:
+            switch viewModel.instance.modLoader {
+            case .fabric: "iconFabric"
+            case .forge: "iconForge"
+            case .neoforge: "iconNeoforge"
+            case nil: "iconGrassBlock"
+            }
+        case .preset(let icon):
+            icon.asset
+        case .custom:
+            nil
+        }
+    }
+
+    /// 自定义图片：选完直接把文件复制进实例目录。
+    private func chooseIcon() {
+        let panel: NSOpenPanel = .init()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.png, .jpeg]
+        panel.title = "选择实例图标"
+        panel.begin { result in
+            guard result == .OK, let url = panel.url else { return }
+            viewModel.setIcon(url)
+        }
+    }
+
     // MARK: - 个性化
 
     private var personalizationCard: some View {
         MyCard("个性化", foldable: false) {
             VStack(alignment: .leading, spacing: 12) {
                 SettingRow("图标", labelWidth: 80) {
-                    // 原版的图标是一排预设方块 / 物品的网格，这里同样开一个选择器，
-                    // 不再只有「自动 / 自定义图片」两个选项。
-                    HStack(spacing: 12) {
-                        InstanceIconView(icon: icon)
-                            .frame(width: 22, height: 22)
-                        MyButton("选择图标…") { showingIconPicker = true }
-                            .frame(width: 140)
-                        Spacer(minLength: 0)
-                    }
+                    // 和原版一样是个下拉框：默认 / 各预设图标 / 自定义…。
+                    // 下拉里只显示打包在 App 里的那张图，**选中哪一个才去云端取哪一个**，
+                    // 不是打开就一口气拉 27 张。
+                    MySelect(iconBinding, entries: iconChoices, icon: iconName(for:))
+                        .frame(maxWidth: .infinity)
                 }
                 SettingRow("分类", labelWidth: 80) {
                     MySelect(categoryBinding, entries: categoryEntries)

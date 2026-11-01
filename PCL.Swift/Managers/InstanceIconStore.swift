@@ -64,8 +64,29 @@ struct InstancePresetIcon: Identifiable, Hashable {
 }
 
 
+/// 图标下拉里的一个选项。
+///
+/// 选择器是一个普通的下拉框（MySelect），不是弹窗：打开时只显示打包在 App 里的图标，
+/// **选中哪一个才去云端取哪一个**，不会一打开就把 27 张全拉下来。
+enum InstanceIconChoice: Hashable, CustomStringConvertible {
+    /// 按加载器自动推导（没有加载器就是草方块）。
+    case automatic
+    /// 预设图标。
+    case preset(InstancePresetIcon)
+    /// 自己挑一张图片。
+    case custom
+
+    var description: String {
+        switch self {
+        case .automatic: "默认"
+        case .preset(let icon): icon.name
+        case .custom: "自定义…"
+        }
+    }
+}
+
 enum InstanceIconCatalog {
-    /// 预设图标，顺序即选择器里的顺序（「默认」不在其中，它固定排第一格）。
+    /// 预设图标，顺序即选择器里的顺序（「默认」不在其中，它固定排第一项）。
     static let presets: [InstancePresetIcon] = [
         // 草方块固定排第二（第一格是「默认」）。
         .init(id: "grass_block", name: "草方块"),
