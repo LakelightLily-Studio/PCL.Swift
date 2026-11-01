@@ -583,6 +583,12 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
     CurseForge 那边分别是 `modLoaderType` 与 `categoryId`，classId 见 `CurseForgeMod.classId(for:)`。
   - CurseForge 的文件列表**带依赖但按 modId 逐个查**，所以只给「当前实例能装」的版本查依赖，
     且一次最多 8 个（`dependencyBudget`），否则打开页面就是几十个请求。
+  - **Modrinth 的依赖必须批量取**（`ResourceInstallViewModel.collectModrinthVersions`）：
+    先收集所有版本的去重必需依赖，再用 `/v2/projects?ids=[...]` 每 50 个一批拿回来。
+    早先是「每个版本的每个依赖各发一次 `/v2/project/{id}`」，整合包上百个版本 × 几十个依赖，
+    点进去要串行跑几千次请求，首屏几十秒——这是`整合包版本列表慢`的根因。
+    版本列表本身也别写 `revalidate: true`：每次进页面都核对一遍没有必要。
+    依赖查不到就当作没有依赖信息、列表照常显示（PCL2 也是这么处理的）。
   - **刷新**：侧边栏条目悬停时出现刷新按钮（原版 PageDownloadLeft 的 6 个条目各有一个），
     侧边栏与页面不在同一棵视图树里，所以走 `Managers/ResourceRefreshCenter.swift` 的按类型令牌：
     侧边栏点刷新 → 计数 +1 → 对应页面 `onChange` 收到后用**当前界面上的条件**重搜并回到第一页，
@@ -622,8 +628,9 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
   四个模组加载器图标不是原版素材（取自 PCL2 与各自官网），不在脚本里。
   **不再有打包兜底**：断网时下拉里的预设图标是空的（只显示名字），这是刻意的——
   少一份要同步的副本；加载器图标（默认那一项）仍是 App 自带的资源。
-  「自定义…」是模态弹窗（`InstanceIconCustomDialog`）：标题左边是实时预览，正文下面一行
-  输入框 + 「选择本地图片」，保存时按 http(s) 地址下载、否则按本地路径复制。
+  「自定义…」走项目自绘的模态框（`MessageBoxManager.showIconDialogAsync`，`MessageBoxModel.Content.iconURL`）：
+  标题左边是实时预览，正文下面一行输入框 + 「选择本地图片」，保存时按 http(s) 地址下载、
+  否则按本地路径复制。**不要**再退回系统 sheet 或 NSOpenPanel。
   换图后必须同时改 `InstanceIconStore.iconSetVersion`：云端路径不变，客户端按 URL 做磁盘缓存，
   不换版本号老用户会一直用旧图（`DomesticAssets.mirrors(for:cacheBust:)` 负责把版本拼进每条地址）。
 

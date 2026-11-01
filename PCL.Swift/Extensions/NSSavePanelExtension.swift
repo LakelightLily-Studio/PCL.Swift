@@ -8,8 +8,12 @@
 //  看起来像"点了之后弹出去一个窗口"；sheet 从标题栏下方滑出、挡住整个窗口，
 //  与「模态」的语义一致，也和项目里自绘弹窗的观感更接近。
 //
-//  注意别把它命名成 beginSheet：NSWindow 自己就有 beginSheet(_:completionHandler:)，
-//  同名会让编译器挑到 NSWindow 那个重载，报 "expected argument type NSWindow"。
+//  **必须用 beginSheetModal(for:)，不能用 NSWindow.beginSheet(_:)**：
+//  后者只是把面板挂上去，不会启动 NSSavePanel 自己的模态会话——面板能看见，
+//  但点「取消 / 打开」全都没反应（按钮走的是 cancel:/ok:，没有会话可结束）。
+//
+//  方法也别叫 beginSheet：NSWindow 自带 beginSheet(_:completionHandler:)，
+//  同名会让编译器挑到那个重载，报 "expected argument type NSWindow"。
 //
 
 import AppKit
@@ -19,14 +23,19 @@ extension NSSavePanel {
     ///
     /// 拿不到可见窗口时（极少见）退回 begin，至少不会点了没反应。
     func presentAsSheet(completion: @escaping (NSApplication.ModalResponse) -> Void) {
-        let window: NSWindow? = NSApplication.shared.keyWindow
-            ?? NSApplication.shared.mainWindow
-            ?? NSApplication.shared.windows.first { $0.isVisible }
+        // 不要用 keyWindow：下拉框的 SelectPanel 是 NSPanel，可能会短暂成为 key，
+        // 把 sheet 挂到一个马上要关掉的面板上，看起来就是"弹出来但点不动"。
+        let candidates: [NSWindow] = NSApplication.shared.windows.filter { window in
+            window.isVisible && !(window is NSPanel)
+        }
+        let window: NSWindow? = candidates.first { $0.isKeyWindow }
+            ?? candidates.first { $0 is AppWindow }
+            ?? candidates.first
         guard let window else {
             begin(completionHandler: completion)
             return
         }
-        window.beginSheet(self) { response in
+        beginSheetModal(for: window) { response in
             completion(response)
         }
     }

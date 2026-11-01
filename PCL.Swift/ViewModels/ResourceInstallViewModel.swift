@@ -69,8 +69,36 @@ class ResourceInstallViewModel: ObservableObject {
         selectedVersionGroup: inout VersionGroup?
     ) async throws {
         guard case .modrinth(let projectId) = project.source else { return }
-        let versions: [ModrinthVersion] = try await ModrinthAPIClient.shared.versions(ofProject: projectId, revalidate: true)
-        
+        // 版本列表只取一次；不再强制 revalidate——每次点进来都去核对一遍列表没有意义，
+        // 用户主动点刷新时 HTTPClient 那边自然会重新取。
+        let versions: [ModrinthVersion] = try await ModrinthAPIClient.shared.versions(ofProject: projectId)
+
+        // 依赖一次性批量取。
+        //
+        // 原来是对**每个版本的每个必需依赖**各发一次 /v2/project/{id}：整合包动辄上百个版本、
+        // 几十个依赖，点进去要串行跑几千次请求（首屏几十秒）。这里先收集去重，
+        // 再用 /v2/projects?ids=[...] 分批（每批 50 个）拿回来，
+        // 请求数从「版本数 × 依赖数」降到「唯一依赖数 / 50」，与 PCL2 一致。
+        let dependencyIds: [String] = Array(Set(versions.flatMap { version -> [String] in
+            version.dependencies.compactMap { dependency in
+                dependency.isRequired ? dependency.projectId : nil
+            }
+        }))
+        var dependencyProjects: [String: ModrinthProject] = [:]
+        for start in stride(from: 0, to: dependencyIds.count, by: 50) {
+            let chunk: [String] = Array(dependencyIds[start..<min(start + 50, dependencyIds.count)])
+            do {
+                let projects: [ModrinthProject] = try await ModrinthAPIClient.shared.projects(chunk)
+                for project in projects {
+                    dependencyProjects[project.id] = project
+                    dependencyProjects[project.slug] = project
+                }
+            } catch {
+                // 拿不到就当作没有依赖信息，列表照常显示（与 PCL2 的处理一致）。
+                warn("批量获取 Modrinth 依赖失败：\(error.localizedDescription)")
+            }
+        }
+
         for version in versions {
             var dependencies: [ProjectVersionModel.Dependency] = []
             for dependency in version.dependencies {
@@ -78,11 +106,10 @@ class ResourceInstallViewModel: ObservableObject {
                       dependency.isRequired else {
                     continue
                 }
-                if let dependencyProject = try await ModrinthAPIClient.shared.project(dependencyProjectId) {
+                if let dependencyProject = dependencyProjects[dependencyProjectId] {
                     dependencies.append(.init(versionId: dependency.id, projectId: dependencyProjectId, project: .init(dependencyProject)))
                 } else {
                     warn("依赖 \(dependencyProjectId) 在 Modrinth 上已不存在")
-                    debug(version)
                 }
             }
             
