@@ -62,20 +62,27 @@ jobs:
           # unzip 解包，会把框架里的 Versions/Current 符号链接写成普通文件，重新打包后
           # 签名当场作废——2.2.0 的包就是这么坏的，用户更新后只看到「应用程序无法打开」。
           # 这里直接取 artifact 的 zip 原始字节，再用 ditto 解，符号链接才保得住。
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
-            --jq '.artifacts[] | select(.name | startswith("PCL.Swift-artifact-")) | "\(.id) \(.name)"' |
-          while read -r id name; do
-            echo "下载 $name（artifact $id）"
+          # 变量一律写 ${}：紧贴中文全角字符时，bash 会把多字节字节吃进变量名，
+          # 报 name<乱码>: unbound variable（第一次跑就是这么挂的）。
+          for arch in arm64 x86_64; do
+            name="PCL.Swift-artifact-${arch}.zip"
+            id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+              --jq ".artifacts[] | select(.name == \"${name}\") | .id")
+            if [ -z "${id}" ]; then
+              echo "::error::找不到产物 ${name}"
+              exit 1
+            fi
+            echo "download ${name} (artifact ${id})"
             curl -sSL --fail \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
-              -o "artifact/wrapper-$id.zip" \
+              -o "artifact/wrapper-${id}.zip" \
               "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip"
             # 每个架构解到自己那层目录：两个产物的内容同名（PCL.Swift.app / build.xcarchive），
-            # 解到同一层会互相覆盖。ditto 解出来的符号链接是完好的（已实测）。
-            mkdir -p "artifact/$name"
-            ditto -x -k "artifact/wrapper-$id.zip" "artifact/$name"
-            rm -f "artifact/wrapper-$id.zip"
+            # 解到同一层会互相覆盖。ditto 解出来的符号链接是完好的（本地实测过）。
+            mkdir -p "artifact/${name}"
+            ditto -x -k "artifact/wrapper-${id}.zip" "artifact/${name}"
+            rm -f "artifact/wrapper-${id}.zip"
           done
           ls -l artifact
 
