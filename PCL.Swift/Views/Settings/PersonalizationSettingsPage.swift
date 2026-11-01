@@ -57,12 +57,18 @@ struct PersonalizationSettingsPage: View {
             VStack(alignment: .leading, spacing: 10) {
                 // 外观：跟随系统 / 浅色 / 深色。与主题色是两个维度，放在主题上面。
                 SettingRow("外观", labelWidth: 120, verticalPadding: 2) {
-                    HStack(spacing: 26) {
+                    // 和下面的主题网格共用同一套五列布局：三档才会和主题的第一行对齐，
+                    // 用 HStack 固定间距的话，浅色 / 深色会落在主题列与列之间的空隙上。
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .leading), count: 5),
+                        alignment: .leading,
+                        spacing: 10
+                    ) {
                         ForEach(AppearanceMode.allCases, id: \.self) { mode in
                             MyRadioBox(checked: appearanceBinding(mode), text: mode.description)
                         }
-                        Spacer(minLength: 0)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 SettingRow("主题", labelWidth: 120, verticalPadding: 2) {
@@ -307,7 +313,7 @@ struct PersonalizationSettingsPage: View {
 
                 switch LauncherConfig.shared.homepageType {
                 case .preset:
-                    SettingRow("主页预设", labelWidth: 90) {
+                    SettingRow("主页预设", labelWidth: 120) {
                         MySelect(Binding(
                             get: { LauncherConfig.shared.homepagePreset },
                             set: { LauncherConfig.shared.homepagePreset = $0; config.touch() }
@@ -336,7 +342,7 @@ struct PersonalizationSettingsPage: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                 case .remote:
-                    SettingRow("下载地址", labelWidth: 90) {
+                    SettingRow("下载地址", labelWidth: 120) {
                         MyTextField(text: Binding(
                             get: { LauncherConfig.shared.homepageURL },
                             set: { LauncherConfig.shared.homepageURL = $0 }

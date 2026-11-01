@@ -103,8 +103,9 @@ struct MessageBoxView: View {
                     MyText("从 URL 获取图标或使用本地图标")
                     HStack(spacing: 10) {
                         MyTextField(text: $inputText, placeholder: placeholder ?? "")
-                        MyButton("选择本地图片") { chooseLocalImage() }
-                            .fixedSize()
+                        // 强调色、与输入框同高（MyTextField 是 26）。
+                        MyButton("选择本地图片", type: .highlight) { chooseLocalImage() }
+                            .frame(height: 26)
                     }
                 }
                 .frame(width: 420)

@@ -167,30 +167,32 @@ struct LauncherSettingsPage: View {
     private var cacheCard: some View {
         MyCard("缓存", foldable: false) {
             VStack(alignment: .leading, spacing: 10) {
+                // 时间限制和开关并成一行：调节框在复选框左边，关掉缓存时整块置灰。
                 SettingRow("资源列表", labelWidth: 120) {
-                    MyComboBox(checked: $enableListCache, text: "启用资源列表缓存")
-                        .onChange(of: enableListCache) { newValue in
-                            LauncherConfig.shared.enableResourceListCache = newValue
-                            // 关掉时立刻清空，避免"关了还在用旧数据"。
-                            if !newValue {
-                                ResourceCacheCenter.shared.clearLists()
+                    HStack(spacing: 10) {
+                        MySelect($listCacheMinutes, entries: [10, 30])
+                            .frame(width: 140)
+                            // .disabled 管不到 MySelect 自己挂的 onTapGesture，
+                            // 直接关掉命中测试，关缓存时才是真的点不动。
+                            .allowsHitTesting(enableListCache)
+                            .opacity(enableListCache ? 1 : 0.5)
+                            .onChange(of: listCacheMinutes) { newValue in
+                                LauncherConfig.shared.resourceListCacheMinutes = newValue
+                                configObserver.touch()
                             }
-                            configObserver.touch()
-                        }
-                }
-
-                SettingRow("时间限制", labelWidth: 120) {
-                    // 不要在这里再补 Spacer：SettingRow 的内容区本来就靠右对齐，
-                    // 多一个尾部 Spacer 会把下拉框顶回左边，与上下两行的复选框错开。
-                    MySelect($listCacheMinutes, entries: [10, 30])
-                        .frame(width: 140)
-                        .disabled(!enableListCache)
-                        .opacity(enableListCache ? 1 : 0.5)
-                        .onChange(of: listCacheMinutes) { newValue in
-                            LauncherConfig.shared.resourceListCacheMinutes = newValue
-                            configObserver.touch()
-                        }
-                    MyText("分钟", size: 12, color: .colorGray3)
+                        MyText("分钟", size: 12, color: .colorGray3)
+                            .opacity(enableListCache ? 1 : 0.5)
+                        MyComboBox(checked: $enableListCache, text: "启用资源列表缓存")
+                            .padding(.leading, 6)
+                            .onChange(of: enableListCache) { newValue in
+                                LauncherConfig.shared.enableResourceListCache = newValue
+                                // 关掉时立刻清空，避免"关了还在用旧数据"。
+                                if !newValue {
+                                    ResourceCacheCenter.shared.clearLists()
+                                }
+                                configObserver.touch()
+                            }
+                    }
                 }
 
                 SettingRow("图标", labelWidth: 120) {
@@ -207,8 +209,9 @@ struct LauncherSettingsPage: View {
                 }
 
                 SettingRow("缓存管理", labelWidth: 120) {
-                    MyButton("清除缓存") { confirmClearCache() }
-                        .frame(width: 120)
+                    // 与输入框同高（26），强调色按钮——和弹窗里的「选择本地图片」保持一致。
+                    MyButton("清除缓存", type: .highlight) { confirmClearCache() }
+                        .frame(width: 120, height: 26)
                 }
 
                 MyText(
