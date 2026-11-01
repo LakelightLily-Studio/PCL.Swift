@@ -70,7 +70,9 @@ struct InstanceListSidebar: Sidebar {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        if panel.runModal() == .OK, let url = panel.url {
+        // sheet 而不是 runModal：不要弹出一扇与启动器脱节的独立窗口。
+        panel.presentAsSheet { result in
+            guard result == .OK, let url = panel.url else { return }
             if let repository = instanceVM.repositories.first(where: { $0.url == url }) {
                 instanceVM.switchRepository(to: repository)
                 AppRouter.shared.setRoot(.launch)
@@ -100,8 +102,8 @@ struct InstanceListSidebar: Sidebar {
             .init(filenameExtension: "mrpack")!
         ]
         
-        if panel.runModal() == .OK {
-            guard let url = panel.url else { return }
+        panel.presentAsSheet { result in
+            guard result == .OK, let url = panel.url else { return }
             Task.detached {
                 await modpackViewModel.importModpack(at: url, repository: repository)
             }

@@ -270,7 +270,7 @@ struct InstalledResourcesPage: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.zip, UTType(filenameExtension: "jar") ?? .zip]
         panel.title = "选择要安装的\(viewModel.type.localizedName)"
-        panel.begin { result in
+        panel.presentAsSheet { result in
             guard result == .OK, let url = panel.url else { return }
             // 数据包要选存档：作用域是单个世界，选错了装进去也不会生效。
             if viewModel.type == .datapack {

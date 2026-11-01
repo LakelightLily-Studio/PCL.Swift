@@ -300,7 +300,7 @@ struct LauncherSettingsPage: View {
         panel.nameFieldStringValue = "pcl-swift-settings.json"
         panel.allowedContentTypes = [.json]
         panel.canCreateDirectories = true
-        panel.begin { result in
+        panel.presentAsSheet { result in
             guard result == .OK, let url = panel.url else { return }
             do {
                 let data: Data = try SettingsTransferService.exportData(from: LauncherConfig.shared)
@@ -321,7 +321,7 @@ struct LauncherSettingsPage: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.json]
-        panel.begin { result in
+        panel.presentAsSheet { result in
             guard result == .OK, let url = panel.url else { return }
             MessageBoxManager.shared.showText(
                 title: "确认导入",

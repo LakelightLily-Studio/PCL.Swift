@@ -104,7 +104,10 @@ struct MessageBoxView: View {
                     HStack(spacing: 10) {
                         MyTextField(text: $inputText, placeholder: placeholder ?? "")
                         // 强调色、与输入框同高（MyTextField 是 26）。
+                        // 只占文字需要的宽度：不加 fixedSize 时它会和输入框平分整行，
+                        // 变成一个很宽的大按钮。
                         MyButton("选择本地图片", type: .highlight) { chooseLocalImage() }
+                            .fixedSize(horizontal: true, vertical: false)
                             .frame(height: 26)
                     }
                 }
@@ -136,7 +139,7 @@ struct MessageBoxView: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image]
         panel.title = "选择图标图片"
-        panel.begin { result in
+        panel.presentAsSheet { result in
             guard result == .OK, let url = panel.url else { return }
             inputText = url.path
         }

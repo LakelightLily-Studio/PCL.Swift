@@ -379,7 +379,7 @@ struct GameSettingsPage: View {
         panel.allowsMultipleSelection = false
         panel.title = "选择 java 可执行文件"
 
-        panel.begin { result in
+        panel.presentAsSheet { result in
             guard result == .OK, let url = panel.url else { return }
             do {
                 let runtime = try viewModel.addCustomRuntime(at: url)

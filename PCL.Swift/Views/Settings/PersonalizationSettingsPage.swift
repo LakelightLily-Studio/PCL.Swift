@@ -198,7 +198,7 @@ struct PersonalizationSettingsPage: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.png, .jpeg, .image]
         panel.title = "选择背景图片"
-        panel.begin { result in
+        panel.presentAsSheet { result in
             guard result == .OK, let url = panel.url else { return }
             backgroundImageManager.select(url)
             config.touch()
@@ -416,7 +416,7 @@ struct PersonalizationSettingsPage: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.png, .jpeg]
         panel.title = "选择标题栏图片"
-        panel.begin { result in
+        panel.presentAsSheet { result in
             guard result == .OK else { return }
             LauncherConfig.shared.titleBarImageURL = panel.url
             config.touch()

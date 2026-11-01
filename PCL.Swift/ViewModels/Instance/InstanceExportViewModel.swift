@@ -37,7 +37,7 @@ class InstanceExportViewModel: ObservableObject {
         panel.nameFieldStringValue = name + ".mrpack"
         panel.allowedContentTypes = [.init(filenameExtension: "mrpack") ?? .zip]
         panel.canCreateDirectories = true
-        panel.begin { [weak self] result in
+        panel.presentAsSheet { [weak self] result in
             guard let self, result == .OK, let url = panel.url else { return }
             self.runExport(to: url, name: name)
         }
