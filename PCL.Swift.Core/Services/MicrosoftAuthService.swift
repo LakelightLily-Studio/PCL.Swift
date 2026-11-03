@@ -11,7 +11,7 @@ import SwiftyJSON
 public class MicrosoftAuthService {
     public private(set) var pollCount: Int?
     public private(set) var pollInterval: Int?
-    private let clientID: String = "dd28b3f2-1db5-49b7-9228-99fdb46dfaca"
+    private let clientID: String = "45b36271-8c5d-41f6-b897-77aca80f3380"
     private var deviceCode: String?
     private var oAuthToken: String?
     private var refreshToken: String?
