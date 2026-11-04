@@ -4,7 +4,7 @@
 //
 //  主页预设「PCL.Swift 更新日志」。
 //
-//  每个版本一张卡片、默认展开：主页打开就能看到这一版改了什么，不用去翻 Release 页。
+//  只展示最近两个版本，每个版本一张卡片、默认展开：主页打开就能看到这一版改了什么，不用去翻 Release 页。
 //  内容来自国内分发仓库（见 ChangelogLoader），失败时退回缓存与打包进 App 的那份。
 //
 
@@ -12,6 +12,10 @@ import SwiftUI
 import Core
 
 struct ChangelogHomepageView: View {
+    /// 主页只展示最近两个版本；完整日志仍保留在 `document.entries` 里，
+    /// 以后要加「查看全部」时直接从这里取，不需要重新拉取。
+    private static let visibleVersionLimit: Int = 2
+
     @State private var document: ChangelogDocument?
     @State private var errorMessage: String?
     @State private var refreshing: Bool = false
@@ -19,7 +23,7 @@ struct ChangelogHomepageView: View {
     var body: some View {
         CardContainer {
             if let document {
-                ForEach(Array(document.entries.enumerated()), id: \.element.id) { index, entry in
+                ForEach(Array(document.entries.prefix(Self.visibleVersionLimit).enumerated()), id: \.element.id) { index, entry in
                     card(entry)
                         .cardIndex(index)
                 }
