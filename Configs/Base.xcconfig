@@ -1,3 +1,5 @@
 MARKETING_VERSION = 2.2.2
-CURRENT_PROJECT_VERSION = 1
+// 构建号 = 大版本(1 位) + 小版本(1 位) + 构建序号(3 位)，2.2.2 这次是 22021。
+// 这里是唯一来源：CI 不再用 git rev-list 的提交数覆盖它，发版带的就是这个值。
+CURRENT_PROJECT_VERSION = 22021
 DEBUG_MODE = NO

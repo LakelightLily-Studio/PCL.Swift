@@ -47,7 +47,6 @@ jobs:
 
       - name: Get version
         run: |
-          echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
           VERSION_NUMBER=$(grep '^MARKETING_VERSION' Configs/Base.xcconfig | cut -d '=' -f2 | xargs)
           echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
           echo "TAG_NAME=v$VERSION_NUMBER" >> $GITHUB_ENV

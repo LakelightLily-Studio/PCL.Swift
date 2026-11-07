@@ -65,9 +65,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set version
-        run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
-
       - name: Generate Secrets.properties
         env:
           CURSE_FORGE_API_KEY: ${{ secrets.CURSE_FORGE_API_KEY }}
@@ -100,7 +97,7 @@ jobs:
 
       - name: Build app
         run: |
-          echo "Build number: $BUILD_NUMBER"
+          echo "Build number: $(grep '^CURRENT_PROJECT_VERSION' Configs/Base.xcconfig | cut -d '=' -f2 | xargs)"
 
           # 与本地保持一致：装了 Swift 6.4 就用它，否则回退 Xcode 自带工具链
           # （源码用了 6.1+ 的语法，Xcode 自带的 6.0 编不过）。
@@ -122,7 +119,6 @@ jobs:
             -project PCL.Swift.xcodeproj
             -scheme PCL.Swift
             -configuration "${{ inputs.build_configuration }}"
-            CURRENT_PROJECT_VERSION=$BUILD_NUMBER
             ARCHS=${{ inputs.arch }}
             ONLY_ACTIVE_ARCH=NO
             -archivePath build
