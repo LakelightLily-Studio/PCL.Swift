@@ -673,3 +673,7 @@ minecraftRepositories / currentRepositoryId——前者是凭据，后者是本�
 - 不要顺手格式化无关文件、不要改 `Package.resolved`、不要动 `xcuserdata`（已 gitignore）。
 - 未经明确要求，不要创建 git commit / 不要 push / 不要发 Release。
 - 改动涉及用户可见行为时，同步更新 `CONTRIBUTING.md` 或本文件里对应的约定，而不是只在代码注释里留话。
+- **加了新功能就要改 README**：凡是用户能在界面上用到的新功能、新特性或优化，都要在 `README.md` 的
+  「相比 PCL.Mac.Refactor 改了什么」里补一条。那一节只写用户能感知到什么，**不要写实现方式**
+  （单例注入、错误处理分层、ATS、CI 之类的都不进这一节）；判断标准是"用户会不会发现多了/变了什么"，
+  而不是"代码动了多少"。
