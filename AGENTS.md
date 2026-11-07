@@ -19,7 +19,8 @@ PCL.Swift；只有 **Swift 模块名仍是 `Core`**（`import Core`），改它�
 - 最低系统：App 与 Core 为 macOS 12.0，测试 Target 为 14.0（见 `Configs/*.xcconfig` 与 pbxproj）。
 - 同时支持 Intel 与 Apple Silicon，不要引入只对单一架构成立的假设。
 - 版本号与构建号都在 `Configs/Base.xcconfig`：`MARKETING_VERSION`（营销版本，如 2.2.2）与
-  `CURRENT_PROJECT_VERSION`（构建号，如 22021 = 大版本 2 + 小版本 2 + 构建序号 021）。
+  `CURRENT_PROJECT_VERSION`（构建号，位数固定为 **1 + 2 + 2**：大版本 + 小版本 + 构建序号，
+  如 2.2.2 的第 21 次构建 = `2` `02` `21` = 20221）。序号**每个小版本重新计数**，2.3.0 从 20301 起。
   **CI 不再用 `git rev-list --count HEAD` 覆盖构建号**，发版带的就是文件里那个值，所以发版前要把序号手动加一。
 
 ## 构建与测试
